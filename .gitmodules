@@ -1,0 +1,3 @@
+[submodule "alembic"]
+	path = alembic
+	url = git@github.com:alembic/alembic.git
