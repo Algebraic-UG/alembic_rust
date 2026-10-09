@@ -7,4 +7,4 @@ cpp_build_dir: get_cpp
     mkdir -p alembic_cpp/build/
 
 get_cpp:
-    git submodule update --init --recursive
+    git submodule update --init alembic_cpp
