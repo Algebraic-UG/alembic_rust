@@ -72,7 +72,7 @@
 //! ```
 
 #[cfg(target_endian = "big")]
-compile_error!("Ogawa archives can only be written on little-endian targets");
+compile_error!("alembic_rust supports only little-endian targets");
 
 mod error;
 mod format;
