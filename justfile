@@ -1,5 +1,5 @@
 abcecho_bin := justfile_directory() / "alembic_cpp/build/bin/AbcEcho/abcecho"
-expected_dir := justfile_directory() / "tests/expected"
+expected_dir := justfile_directory() / "examples/expected"
 
 [working-directory: 'alembic_cpp/build']
 abcecho: cpp_build_dir
