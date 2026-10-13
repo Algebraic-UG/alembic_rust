@@ -5,6 +5,7 @@ use std::path::Path;
 use byteorder::{LittleEndian, WriteBytesExt};
 
 use crate::compound::CompoundWriter;
+use crate::data_type::{DataType, Pod};
 use crate::error::{Error, Result};
 use crate::hash::ObjectHierarchyHashes;
 use crate::headers::encode_object_header;
@@ -21,12 +22,14 @@ const ALEMBIC_VERSION_VALUE: &str = concat!(
     env!("CARGO_PKG_VERSION"),
     ")"
 );
+const USER_DATA_BYTE: DataType = DataType::new(Pod::Uint8, 1);
 
 pub struct ArchiveWriter<W: Write + Seek> {
     output: ArchiveOutput<W>,
     ogawa_file_version: DataRef,
     library_version: DataRef,
     metadata: MetaData,
+    top_object_properties: CompoundWriter,
     top_object_children: ChildObjects,
     abandoned_object: Option<String>,
 }
@@ -54,6 +57,7 @@ impl<W: Write + Seek> ArchiveWriter<W> {
             ogawa_file_version,
             library_version,
             metadata: MetaData::new(),
+            top_object_properties: CompoundWriter::new(),
             top_object_children: ChildObjects::default(),
             abandoned_object: None,
         })
@@ -61,6 +65,16 @@ impl<W: Write + Seek> ArchiveWriter<W> {
 
     pub fn metadata_mut(&mut self) -> &mut MetaData {
         &mut self.metadata
+    }
+
+    pub fn user_data(&mut self, name: &str, bytes: &[u8]) -> Result<()> {
+        self.top_object_properties.add_array(
+            &mut self.output,
+            name,
+            &MetaData::new(),
+            USER_DATA_BYTE,
+            bytes,
+        )
     }
 
     pub fn finish(mut self) -> Result<W> {
@@ -124,13 +138,14 @@ impl<W: Write + Seek> ArchiveWriter<W> {
     }
 
     fn write_top_object(&mut self) -> Result<GroupRef> {
+        let properties =
+            std::mem::take(&mut self.top_object_properties).finish(&mut self.output)?;
         let ogawa = &mut self.output.ogawa;
-        let no_top_level_properties = GroupRef::EMPTY;
         let child_headers = ogawa.write_data(&[
             &self.top_object_children.encoded_headers,
             &ObjectHierarchyHashes::placeholder().encode(),
         ])?;
-        let mut children = vec![Child::from(no_top_level_properties)];
+        let mut children = vec![Child::from(properties)];
         children.extend(
             self.top_object_children
                 .groups
@@ -158,4 +173,35 @@ fn encode_time_samplings(default_time_sampling_max_samples: u32) -> Vec<u8> {
         encoded.write_f64::<LittleEndian>(time).unwrap();
     }
     encoded
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    fn new_archive() -> ArchiveWriter<Cursor<Vec<u8>>> {
+        ArchiveWriter::create(Cursor::new(Vec::new())).unwrap()
+    }
+
+    #[test]
+    fn user_data_is_written_verbatim() {
+        let blob: Vec<u8> = (0..=255).collect();
+        let mut archive = new_archive();
+        archive.user_data("blob", &blob).unwrap();
+        let file = archive.finish().unwrap().into_inner();
+        assert!(file.windows(blob.len()).any(|w| w == blob));
+    }
+
+    #[test]
+    fn user_data_names_must_be_unique() {
+        let mut archive = new_archive();
+        archive.user_data("blob", &[1]).unwrap();
+        assert!(matches!(
+            archive.user_data("blob", &[2]),
+            Err(Error::DuplicateName { .. })
+        ));
+        archive.begin_points("blob", &[]).unwrap().finish().unwrap();
+        archive.finish().unwrap();
+    }
 }
