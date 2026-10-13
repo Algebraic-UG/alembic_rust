@@ -5,16 +5,26 @@ use crate::error::{Error, Result};
 const PAIR_SEPARATOR: char = ';';
 const ASSIGNMENT_SEPARATOR: char = '=';
 
+/// Key/value metadata of an archive.
+///
+/// Entries are kept sorted by key. Entries with an empty value are not written.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct MetaData {
     entries_sorted_by_key: BTreeMap<String, String>,
 }
 
 impl MetaData {
+    /// Creates empty metadata.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Sets `key` to `value`, replacing any previous value.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidMetaData`] if the key or the value contains `;` or `=`, which Alembic
+    /// uses as separators.
     pub fn set(&mut self, key: impl Into<String>, value: impl Into<String>) -> Result<()> {
         let (key, value) = (key.into(), value.into());
         reject_separators("key", &key)?;
@@ -23,10 +33,12 @@ impl MetaData {
         Ok(())
     }
 
+    /// The value of `key`, if it is set.
     pub fn get(&self, key: &str) -> Option<&str> {
         self.entries_sorted_by_key.get(key).map(String::as_str)
     }
 
+    /// All entries, sorted by key.
     pub fn entries(&self) -> impl Iterator<Item = (&str, &str)> {
         self.entries_sorted_by_key
             .iter()

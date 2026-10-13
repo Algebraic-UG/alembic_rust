@@ -24,6 +24,14 @@ const ALEMBIC_VERSION_VALUE: &str = concat!(
     ")"
 );
 
+/// Writes an Alembic Ogawa archive of points objects to a stream.
+///
+/// Data is written to the stream as soon as it is passed in; the writer keeps no copies of
+/// positions, attributes or user data. Only names, metadata, record positions and headers stay
+/// in memory until [`finish`](ArchiveWriter::finish).
+///
+/// Once a write fails, the writer is poisoned: every later call returns [`Error::Poisoned`]
+/// and the archive is never marked complete.
 pub struct ArchiveWriter<W: Write + Seek> {
     output: ArchiveOutput<W>,
     ogawa_file_version: DataRef,
@@ -42,12 +50,15 @@ struct ChildObjects {
 }
 
 impl ArchiveWriter<File> {
+    /// Creates (or truncates) the file at `path` and starts an archive in it.
     pub fn create_file(path: impl AsRef<Path>) -> Result<Self> {
         Self::create(File::create(path)?)
     }
 }
 
 impl<W: Write + Seek> ArchiveWriter<W> {
+    /// Starts an archive in `out`, which can be any seekable stream, such as a
+    /// [`File`] or a [`Cursor`](std::io::Cursor).
     pub fn create(out: W) -> Result<Self> {
         let mut ogawa = OgawaWriter::new(out)?;
         let ogawa_file_version = ogawa.write_data(&[&ALEMBIC_OGAWA_FILE_VERSION.to_le_bytes()])?;
@@ -63,10 +74,26 @@ impl<W: Write + Seek> ArchiveWriter<W> {
         })
     }
 
+    /// The archive metadata, for keys like `_ai_Application`, `_ai_DateWritten` or
+    /// `_ai_Description`.
+    ///
+    /// It is written by [`finish`](ArchiveWriter::finish), which also sets
+    /// `_ai_AlembicVersion`.
     pub fn metadata_mut(&mut self) -> &mut MetaData {
         &mut self.metadata
     }
 
+    /// Stores `bytes` as a binary blob called `name`.
+    ///
+    /// The blob is an ordinary `uint8_t` array property on the archive's top object, so any
+    /// Alembic reader can get it back; in C++ that is
+    /// `IArrayProperty(archive.getTop().getProperties(), name)`. Blob names must be unique among
+    /// blobs but may match object names.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidName`] or [`Error::DuplicateName`] if `name` is empty, contains `/` or
+    /// is already used by another blob.
     pub fn user_data(&mut self, name: &str, bytes: &[u8]) -> Result<()> {
         self.top_object_properties.add_array(
             &mut self.output,
@@ -77,6 +104,16 @@ impl<W: Write + Seek> ArchiveWriter<W> {
         )
     }
 
+    /// Completes the archive and returns the stream.
+    ///
+    /// The archive is marked complete at the very end: the root position is patched in and the
+    /// header's frozen byte is written last. If writing stops before that, because of a crash,
+    /// an error or dropping the writer, Alembic readers refuse to open the file.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::UnfinishedObject`] if a [`PointsWriter`](crate::PointsWriter) was dropped without being finished.
+    /// The archive is then left incomplete.
     pub fn finish(mut self) -> Result<W> {
         if let Some(name) = self.abandoned_object.take() {
             return Err(Error::UnfinishedObject { name });

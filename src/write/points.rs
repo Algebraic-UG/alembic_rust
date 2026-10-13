@@ -11,10 +11,18 @@ use crate::format::schema::{
 use crate::write::archive::ArchiveWriter;
 use crate::write::compound::CompoundWriter;
 
+/// The values of a per-point attribute, one element per point.
+///
+/// Attributes are written without `interpretation` metadata, so readers see them as plain float
+/// arrays. Blender, for example, imports a 3-float `Cd` as a vector rather than a colour, and
+/// converts it from Y-up to Z-up.
 #[derive(Debug, Clone, Copy)]
 pub enum Attribute<'a> {
+    /// One float per point.
     Float1(&'a [f32]),
+    /// Two floats per point.
     Float2(&'a [[f32; 2]]),
+    /// Three floats per point.
     Float3(&'a [[f32; 3]]),
 }
 
@@ -44,6 +52,12 @@ impl Attribute<'_> {
     }
 }
 
+/// Adds the optional properties of one points object, created by
+/// [`ArchiveWriter::begin_points`].
+///
+/// The object becomes part of the archive only when [`finish`](PointsWriter::finish) is called.
+/// Dropping it unfinished makes [`ArchiveWriter::finish`] fail with
+/// [`Error::UnfinishedObject`].
 #[must_use = "a points object is only added to the archive by calling finish()"]
 pub struct PointsWriter<'a, W: Write + Seek> {
     archive: &'a mut ArchiveWriter<W>,
@@ -55,6 +69,16 @@ pub struct PointsWriter<'a, W: Write + Seek> {
 }
 
 impl<W: Write + Seek> ArchiveWriter<W> {
+    /// Starts a points object called `name` with the given positions.
+    ///
+    /// This writes `P`, the bounding box `.selfBnds` computed from the positions, and an empty
+    /// `.pointIds`, as upstream does when no IDs are given. The number of positions is the point
+    /// count that every other per-point property must match.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidName`] or [`Error::DuplicateName`] if `name` is empty, contains `/` or
+    /// is already used by another object.
     pub fn begin_points(
         &mut self,
         name: &str,
@@ -96,6 +120,12 @@ impl<W: Write + Seek> ArchiveWriter<W> {
 }
 
 impl<W: Write + Seek> PointsWriter<'_, W> {
+    /// Writes the velocities, as the standard `.velocities` property.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::PointCountMismatch`] if there is not one velocity per point, and
+    /// [`Error::DuplicateName`] if velocities were already written.
     pub fn velocities(&mut self, velocities: &[[f32; 3]]) -> Result<()> {
         self.check_point_count("velocities", VELOCITIES, velocities.len())?;
         self.geom.add_array(
@@ -107,6 +137,12 @@ impl<W: Write + Seek> PointsWriter<'_, W> {
         )
     }
 
+    /// Writes the widths, as the standard `.widths` property.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::PointCountMismatch`] if there is not one width per point, and
+    /// [`Error::DuplicateName`] if widths were already written.
     pub fn widths(&mut self, widths: &[f32]) -> Result<()> {
         self.check_point_count("widths", WIDTHS, widths.len())?;
         self.geom.add_array(
@@ -118,6 +154,13 @@ impl<W: Write + Seek> PointsWriter<'_, W> {
         )
     }
 
+    /// Writes a per-point attribute called `name` into `.arbGeomParams`.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::PointCountMismatch`] if there is not one value per point; nothing is written and
+    /// the points writer stays usable. [`Error::InvalidName`] or [`Error::DuplicateName`] if
+    /// `name` is empty, contains `/` or is already used by another attribute.
     pub fn attribute(&mut self, name: &str, attribute: Attribute<'_>) -> Result<()> {
         self.check_point_count("attribute", name, attribute.num_points())?;
         self.arb_geom_params.add_array(
@@ -129,6 +172,7 @@ impl<W: Write + Seek> PointsWriter<'_, W> {
         )
     }
 
+    /// Adds the points object to the archive.
     pub fn finish(mut self) -> Result<()> {
         self.finished = true;
         let mut geom = std::mem::take(&mut self.geom);
