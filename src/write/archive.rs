@@ -30,8 +30,8 @@ const ALEMBIC_VERSION_VALUE: &str = concat!(
 /// positions, attributes or user data. Only names, metadata, record positions and headers stay
 /// in memory until [`finish`](ArchiveWriter::finish).
 ///
-/// Once a write fails, the writer is poisoned: every later call returns [`Error::Poisoned`]
-/// and the archive is never marked complete.
+/// Once writing to the stream fails, the writer is poisoned: every later write returns
+/// [`Error::Poisoned`] and the archive is never marked complete.
 pub struct ArchiveWriter<W: Write + Seek> {
     output: ArchiveOutput<W>,
     ogawa_file_version: DataRef,
