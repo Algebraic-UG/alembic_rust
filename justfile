@@ -12,11 +12,15 @@ cpp_build_dir: get_cpp
 get_cpp:
     git submodule update --init alembic_cpp
 
-test: unit_tests (check "empty") (check "empty_info") (check "unfinished")
+test: unit_tests (example "empty") (example "empty_info") (example "unfinished")
 
 unit_tests:
     cargo test --quiet
 
 [working-directory: 'target/abc-archives']
-check name: abcecho
+example name: abcecho archives_dir
+    cargo run --quiet --example {{name}} -- {{name}}.abc
     {{abcecho_bin}} {{name}}.abc | tail -n +2 | diff -u {{expected_dir}}/{{name}}.txt -
+
+archives_dir:
+    mkdir -p target/abc-archives
