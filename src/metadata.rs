@@ -27,6 +27,12 @@ impl MetaData {
         self.entries_sorted_by_key.get(key).map(String::as_str)
     }
 
+    pub fn entries(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.entries_sorted_by_key
+            .iter()
+            .map(|(key, value)| (key.as_str(), value.as_str()))
+    }
+
     pub(crate) fn deserialize(serialized: &str) -> MetaData {
         let entries_sorted_by_key = serialized
             .split(PAIR_SEPARATOR)
