@@ -7,11 +7,14 @@ It writes one specific kind of archive:
 - **Ogawa** backend only. This is the current Alembic format; HDF5 is not supported.
 - **Points** objects only (`AbcGeom_Points_v1`). All objects sit side by side directly under the archive root.
 - **A single time sample**, at time 0.0.
-- **Per-point `f32` attributes** with 1, 2 or 3 components.
+- **Per-point `f32` attributes** with 1, 2 or 3 components, without `interpretation` metadata. Tools see them as plain float arrays; Blender, for example, imports a 3-float `Cd` as a vector and converts it from Y-up to Z-up.
+- **Placeholder hashes.** Sample digests and hierarchy hashes are zeros. Readers don't verify them, but tools that use them to detect identical data would treat same-sized samples as equal.
+- **No sample deduplication.** Only empty samples share a record.
+- **Little-endian targets only**, like upstream's Ogawa writer.
 
 The output follows the layout of Alembic 1.8.12. It writes the same property names, order and metadata as upstream's `OPointsSchema`, so Alembic-aware tools read it as ordinary points.
 
-The reader is meant for the archives this library writes. It skips anything it doesn't recognise.
+The reader is meant for the archives this library writes. It skips anything it doesn't recognise, reads only the first sample of each property, and doesn't check versions, hashes or time sampling.
 
 ## Usage
 
