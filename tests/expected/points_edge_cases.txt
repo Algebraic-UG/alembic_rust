@@ -1,0 +1,27 @@
+points_edge_cases.abc
+  (file doesn't have any ArchiveInfo)
+
+Object name=/no_points
+  CompoundProperty name=.geom;schema=AbcGeom_Points_v1
+    ArrayProperty name=P;interpretation=point;datatype=float32_t[3];arraysize=0;numsamps=1
+    ScalarProperty name=.selfBnds;interpretation=box;datatype=float64_t[6];arraysize=6;numsamps=1
+    ArrayProperty name=.pointIds;interpretation=;datatype=uint64_t;arraysize=0;numsamps=1
+    ArrayProperty name=.velocities;interpretation=vector;datatype=float32_t[3];arraysize=0;numsamps=1
+    ArrayProperty name=.widths;interpretation=;datatype=float32_t;arraysize=0;numsamps=1
+    CompoundProperty name=.arbGeomParams;schema=
+      ArrayProperty name=Cd;interpretation=;datatype=float32_t[3];arraysize=0;numsamps=1
+Object name=/one_point
+  CompoundProperty name=.geom;schema=AbcGeom_Points_v1
+    ArrayProperty name=P;interpretation=point;datatype=float32_t[3];arraysize=1;numsamps=1
+    ScalarProperty name=.selfBnds;interpretation=box;datatype=float64_t[6];arraysize=6;numsamps=1
+    ArrayProperty name=.pointIds;interpretation=;datatype=uint64_t;arraysize=0;numsamps=1
+    ArrayProperty name=.widths;interpretation=;datatype=float32_t;arraysize=1;numsamps=1
+    CompoundProperty name=.arbGeomParams;schema=
+      ArrayProperty name=Cd;interpretation=;datatype=float32_t[3];arraysize=1;numsamps=1
+Object name=/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  CompoundProperty name=.geom;schema=AbcGeom_Points_v1
+    ArrayProperty name=P;interpretation=point;datatype=float32_t[3];arraysize=2;numsamps=1
+    ScalarProperty name=.selfBnds;interpretation=box;datatype=float64_t[6];arraysize=6;numsamps=1
+    ArrayProperty name=.pointIds;interpretation=;datatype=uint64_t;arraysize=0;numsamps=1
+    CompoundProperty name=.arbGeomParams;schema=
+      ArrayProperty name=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;interpretation=;datatype=float32_t;arraysize=2;numsamps=1

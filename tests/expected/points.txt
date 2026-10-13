@@ -1,0 +1,30 @@
+  file written by: alembic_rust points example
+  using Alembic : Alembic 1.8.12 (written by alembic_rust 0.1.0)
+  written on : 
+  user description : 
+
+Object name=/particles
+  CompoundProperty name=.geom;schema=AbcGeom_Points_v1
+    ArrayProperty name=P;interpretation=point;datatype=float32_t[3];arraysize=4;numsamps=1
+    ScalarProperty name=.selfBnds;interpretation=box;datatype=float64_t[6];arraysize=6;numsamps=1
+    ArrayProperty name=.pointIds;interpretation=;datatype=uint64_t;arraysize=0;numsamps=1
+    ArrayProperty name=.velocities;interpretation=vector;datatype=float32_t[3];arraysize=4;numsamps=1
+    ArrayProperty name=.widths;interpretation=;datatype=float32_t;arraysize=4;numsamps=1
+    CompoundProperty name=.arbGeomParams;schema=
+      ArrayProperty name=Cd;interpretation=;datatype=float32_t[3];arraysize=4;numsamps=1
+      ArrayProperty name=N;interpretation=;datatype=float32_t[3];arraysize=4;numsamps=1
+      ArrayProperty name=rest;interpretation=;datatype=float32_t[3];arraysize=4;numsamps=1
+      ArrayProperty name=uv;interpretation=;datatype=float32_t[2];arraysize=4;numsamps=1
+      ArrayProperty name=temperature;interpretation=;datatype=float32_t;arraysize=4;numsamps=1
+Object name=/debris
+  CompoundProperty name=.geom;schema=AbcGeom_Points_v1
+    ArrayProperty name=P;interpretation=point;datatype=float32_t[3];arraysize=2;numsamps=1
+    ScalarProperty name=.selfBnds;interpretation=box;datatype=float64_t[6];arraysize=6;numsamps=1
+    ArrayProperty name=.pointIds;interpretation=;datatype=uint64_t;arraysize=0;numsamps=1
+    CompoundProperty name=.arbGeomParams;schema=
+      ArrayProperty name=mass;interpretation=;datatype=float32_t;arraysize=2;numsamps=1
+Object name=/positions_only
+  CompoundProperty name=.geom;schema=AbcGeom_Points_v1
+    ArrayProperty name=P;interpretation=point;datatype=float32_t[3];arraysize=4;numsamps=1
+    ScalarProperty name=.selfBnds;interpretation=box;datatype=float64_t[6];arraysize=6;numsamps=1
+    ArrayProperty name=.pointIds;interpretation=;datatype=uint64_t;arraysize=0;numsamps=1
