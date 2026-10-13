@@ -2,6 +2,7 @@
 compile_error!("Ogawa archives can only be written on little-endian targets");
 
 mod archive;
+mod compound;
 mod data_type;
 mod error;
 mod hash;
@@ -9,6 +10,10 @@ mod headers;
 mod metadata;
 mod names;
 mod ogawa;
+mod output;
+
+#[cfg(test)]
+mod structure_tests;
 
 pub use archive::ArchiveWriter;
 pub use error::{Error, Result};

@@ -4,21 +4,37 @@ use std::path::Path;
 
 use byteorder::{LittleEndian, WriteBytesExt};
 
-use crate::error::{Error, Result};
-use crate::metadata::{MetaData, MetaDataDictionary};
+use crate::compound::CompoundWriter;
+use crate::error::Result;
+use crate::hash::ObjectHierarchyHashes;
+use crate::headers::encode_object_header;
+use crate::metadata::MetaData;
+use crate::names::SiblingNames;
 use crate::ogawa::{Child, DataRef, GroupRef, OgawaWriter};
+use crate::output::ArchiveOutput;
 
-const ABC_OGAWA_FILE_VERSION: i32 = 0;
-const ABC_LIBRARY_VERSION: i32 = 10812;
+const ALEMBIC_OGAWA_FILE_VERSION: i32 = 0;
+const ALEMBIC_LIBRARY_VERSION_1_8_12: i32 = 10812;
 const ALEMBIC_VERSION_KEY: &str = "_ai_AlembicVersion";
+const ALEMBIC_VERSION_VALUE: &str = concat!(
+    "Alembic 1.8.12 (written by alembic_rust ",
+    env!("CARGO_PKG_VERSION"),
+    ")"
+);
 
 pub struct ArchiveWriter<W: Write + Seek> {
-    ogawa: OgawaWriter<W>,
-    abc_version: DataRef,
+    output: ArchiveOutput<W>,
+    ogawa_file_version: DataRef,
     library_version: DataRef,
     metadata: MetaData,
-    metadata_map: MetaDataDictionary,
-    poisoned: bool,
+    top_object_children: ChildObjects,
+}
+
+#[derive(Default)]
+struct ChildObjects {
+    groups: Vec<GroupRef>,
+    encoded_headers: Vec<u8>,
+    names: SiblingNames,
 }
 
 impl ArchiveWriter<File> {
@@ -30,15 +46,14 @@ impl ArchiveWriter<File> {
 impl<W: Write + Seek> ArchiveWriter<W> {
     pub fn create(out: W) -> Result<Self> {
         let mut ogawa = OgawaWriter::new(out)?;
-        let abc_version = ogawa.write_data(&[&ABC_OGAWA_FILE_VERSION.to_le_bytes()])?;
-        let library_version = ogawa.write_data(&[&ABC_LIBRARY_VERSION.to_le_bytes()])?;
+        let ogawa_file_version = ogawa.write_data(&[&ALEMBIC_OGAWA_FILE_VERSION.to_le_bytes()])?;
+        let library_version = ogawa.write_data(&[&ALEMBIC_LIBRARY_VERSION_1_8_12.to_le_bytes()])?;
         Ok(ArchiveWriter {
-            ogawa,
-            abc_version,
+            output: ArchiveOutput::new(ogawa),
+            ogawa_file_version,
             library_version,
             metadata: MetaData::new(),
-            metadata_map: MetaDataDictionary::default(),
-            poisoned: false,
+            top_object_children: ChildObjects::default(),
         })
     }
 
@@ -47,49 +62,88 @@ impl<W: Write + Seek> ArchiveWriter<W> {
     }
 
     pub fn finish(mut self) -> Result<W> {
-        if self.poisoned {
-            return Err(Error::Poisoned);
-        }
-        self.metadata.set(
-            ALEMBIC_VERSION_KEY,
-            concat!(
-                "Alembic 1.8.12 (written by alembic_rust ",
-                env!("CARGO_PKG_VERSION"),
-                ")"
-            ),
-        )?;
-
-        let top = self.write_top_object()?;
-        let metadata = self
-            .ogawa
-            .write_data(&[self.metadata.serialize().as_bytes()])?;
-        let time_samplings = self.ogawa.write_data(&[&encode_default_time_sampling(0)])?;
-        let indexed_metadata = self.ogawa.write_data(&[&self.metadata_map.encode()])?;
-        let root = self.ogawa.write_group(&[
-            self.abc_version.into(),
+        self.metadata
+            .set(ALEMBIC_VERSION_KEY, ALEMBIC_VERSION_VALUE)?;
+        let top_object = self.write_top_object()?;
+        let ogawa = &mut self.output.ogawa;
+        let metadata = ogawa.write_data(&[self.metadata.serialize().as_bytes()])?;
+        let time_samplings = ogawa.write_data(&[&encode_time_samplings(
+            self.output.default_time_sampling_max_samples,
+        )])?;
+        let metadata_dictionary = ogawa.write_data(&[&self.output.metadata_dictionary.encode()])?;
+        let root = ogawa.write_group(&[
+            self.ogawa_file_version.into(),
             self.library_version.into(),
-            top.into(),
+            top_object.into(),
             metadata.into(),
             time_samplings.into(),
-            indexed_metadata.into(),
+            metadata_dictionary.into(),
         ])?;
-        self.ogawa.finish(root)
+        self.output.ogawa.finish(root)
+    }
+
+    pub(crate) fn output(&mut self) -> &mut ArchiveOutput<W> {
+        &mut self.output
+    }
+
+    pub(crate) fn add_child_object(
+        &mut self,
+        name: &str,
+        metadata: &MetaData,
+        properties: CompoundWriter,
+    ) -> Result<()> {
+        let children = &mut self.top_object_children;
+        children.names.claim(name)?;
+        let properties = properties.finish(&mut self.output)?;
+        let headers_of_no_children = ObjectHierarchyHashes::placeholder().encode();
+        let child_headers = self.output.ogawa.write_data(&[&headers_of_no_children])?;
+        let group = self
+            .output
+            .ogawa
+            .write_group(&[properties.into(), child_headers.into()])?;
+        encode_object_header(
+            &mut children.encoded_headers,
+            name,
+            &metadata.serialize(),
+            &mut self.output.metadata_dictionary,
+        )?;
+        children.groups.push(group);
+        Ok(())
     }
 
     fn write_top_object(&mut self) -> Result<GroupRef> {
-        let properties = self.ogawa.write_group(&[])?;
-        let hashes = [0u8; 32];
-        let headers = self.ogawa.write_data(&[&hashes])?;
-        self.ogawa
-            .write_group(&[Child::Group(properties), Child::Data(headers)])
+        let ogawa = &mut self.output.ogawa;
+        let no_top_level_properties = GroupRef::EMPTY;
+        let child_headers = ogawa.write_data(&[
+            &self.top_object_children.encoded_headers,
+            &ObjectHierarchyHashes::placeholder().encode(),
+        ])?;
+        let mut children = vec![Child::from(no_top_level_properties)];
+        children.extend(
+            self.top_object_children
+                .groups
+                .iter()
+                .copied()
+                .map(Child::from),
+        );
+        children.push(child_headers.into());
+        ogawa.write_group(&children)
     }
 }
 
-fn encode_default_time_sampling(max_samples: u32) -> Vec<u8> {
-    let mut out = Vec::with_capacity(24);
-    out.write_u32::<LittleEndian>(max_samples).unwrap();
-    out.write_f64::<LittleEndian>(1.0).unwrap();
-    out.write_u32::<LittleEndian>(1).unwrap();
-    out.write_f64::<LittleEndian>(0.0).unwrap();
-    out
+fn encode_time_samplings(default_time_sampling_max_samples: u32) -> Vec<u8> {
+    let time_per_cycle = 1.0;
+    let stored_times = [0.0];
+    let mut encoded = Vec::new();
+    encoded
+        .write_u32::<LittleEndian>(default_time_sampling_max_samples)
+        .unwrap();
+    encoded.write_f64::<LittleEndian>(time_per_cycle).unwrap();
+    encoded
+        .write_u32::<LittleEndian>(stored_times.len() as u32)
+        .unwrap();
+    for time in stored_times {
+        encoded.write_f64::<LittleEndian>(time).unwrap();
+    }
+    encoded
 }
