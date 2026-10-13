@@ -55,19 +55,19 @@ This runs the unit tests (`cargo test`), then validates real files with upstream
 
 1. It builds upstream's `abcecho` tool from the `alembic_cpp` submodule (`just abcecho`).
 2. Each listed example `examples/<name>.rs` writes `target/abc-archives/<name>.abc`.
-3. `abcecho` reads each archive. Its output is compared with `tests/expected/<name>.txt`, ignoring the first line, which contains abcecho's build date.
+3. `abcecho` reads each archive. Its output is compared with `examples/expected/<name>.txt`, ignoring the first line, which contains abcecho's build date.
 
 The recipe fails if an example fails or any output differs. You can check a single example with `just example points`.
 
 To add a case:
 
 1. Add `examples/<name>.rs`.
-2. Add its expected output as `tests/expected/<name>.txt`.
+2. Add its expected output as `examples/expected/<name>.txt`.
 3. Append `(example "<name>")` to the `test` recipe in the `justfile`.
 
 `abcecho` checks that a file parses and shows its structure: objects, properties, types, metadata and sample counts. It does not print values, so unit tests cover data correctness.
 
-`tests/expected/empty_info.txt` and `tests/expected/points.txt` contain the crate version (`written by alembic_rust 0.1.0`) and need updating when it changes.
+`examples/expected/empty_info.txt` and `examples/expected/points.txt` contain the crate version (`written by alembic_rust 0.1.0`) and need updating when it changes.
 
 ### Requirements for `just test`
 
