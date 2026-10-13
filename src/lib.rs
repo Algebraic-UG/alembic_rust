@@ -2,7 +2,9 @@
 compile_error!("Ogawa archives can only be written on little-endian targets");
 
 mod archive;
+mod data_type;
 mod error;
+mod hash;
 mod metadata;
 mod names;
 mod ogawa;
