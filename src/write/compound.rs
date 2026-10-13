@@ -4,9 +4,9 @@ use crate::error::Result;
 use crate::format::data_type::DataType;
 use crate::format::metadata::MetaData;
 use crate::format::ogawa::{Child, DataRef, GroupRef};
-use crate::headers::{PropertyLayout, encode_property_header};
-use crate::names::SiblingNames;
-use crate::output::ArchiveOutput;
+use crate::write::headers::{PropertyLayout, encode_property_header};
+use crate::write::names::SiblingNames;
+use crate::write::output::ArchiveOutput;
 
 #[derive(Debug, Default)]
 pub(crate) struct CompoundWriter {

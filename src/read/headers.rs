@@ -112,9 +112,9 @@ impl<'a> Fields<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::hash::ObjectHierarchyHashes;
-    use crate::headers::{PropertyLayout, encode_object_header, encode_property_header};
-    use crate::metadata_dictionary::MetaDataDictionary;
+    use crate::write::hash::ObjectHierarchyHashes;
+    use crate::write::headers::{PropertyLayout, encode_object_header, encode_property_header};
+    use crate::write::metadata_dictionary::MetaDataDictionary;
 
     const FLOAT3: DataType = DataType::new(Pod::Float32, 3);
 

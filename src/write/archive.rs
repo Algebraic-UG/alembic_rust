@@ -4,16 +4,16 @@ use std::path::Path;
 
 use byteorder::{LittleEndian, WriteBytesExt};
 
-use crate::compound::CompoundWriter;
 use crate::error::{Error, Result};
 use crate::format::metadata::MetaData;
 use crate::format::ogawa::{Child, DataRef, GroupRef};
 use crate::format::schema::USER_DATA_BYTE;
-use crate::hash::ObjectHierarchyHashes;
-use crate::headers::encode_object_header;
-use crate::names::SiblingNames;
-use crate::ogawa::OgawaWriter;
-use crate::output::ArchiveOutput;
+use crate::write::compound::CompoundWriter;
+use crate::write::hash::ObjectHierarchyHashes;
+use crate::write::headers::encode_object_header;
+use crate::write::names::SiblingNames;
+use crate::write::ogawa::OgawaWriter;
+use crate::write::output::ArchiveOutput;
 
 const ALEMBIC_OGAWA_FILE_VERSION: i32 = 0;
 const ALEMBIC_LIBRARY_VERSION_1_8_12: i32 = 10812;

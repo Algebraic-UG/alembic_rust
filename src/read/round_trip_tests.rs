@@ -1,9 +1,9 @@
 use std::io::Cursor;
 
-use crate::archive::ArchiveWriter;
 use crate::error::Error;
-use crate::points::Attribute;
 use crate::read::{ArchiveContents, ArchiveReader, ArrayHandle, AttributeValues, read_archive};
+use crate::write::ArchiveWriter;
+use crate::write::Attribute;
 
 type Reader = ArchiveReader<Cursor<Vec<u8>>>;
 

@@ -114,8 +114,8 @@ pub fn read_archive<R: Read + Seek>(source: R) -> Result<(ArchiveContents, Archi
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::archive::ArchiveWriter;
-    use crate::ogawa::OgawaWriter;
+    use crate::write::ArchiveWriter;
+    use crate::write::ogawa::OgawaWriter;
     use std::io::Cursor;
 
     fn written_archive(build: impl FnOnce(&mut ArchiveWriter<Cursor<Vec<u8>>>)) -> Vec<u8> {

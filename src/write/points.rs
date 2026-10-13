@@ -1,7 +1,5 @@
 use std::io::{Seek, Write};
 
-use crate::archive::ArchiveWriter;
-use crate::compound::CompoundWriter;
 use crate::error::{Error, Result};
 use crate::format::data_type::DataType;
 use crate::format::metadata::MetaData;
@@ -10,6 +8,8 @@ use crate::format::schema::{
     PER_POINT_SCOPE, POINT_ID, POINT_IDS, POINTS_SCHEMA, POSITIONS, SELF_BOUNDS, VELOCITIES,
     WIDTHS,
 };
+use crate::write::archive::ArchiveWriter;
+use crate::write::compound::CompoundWriter;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Attribute<'a> {

@@ -123,7 +123,7 @@ impl<R: Read + Seek> OgawaReader<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ogawa::OgawaWriter;
+    use crate::write::ogawa::OgawaWriter;
     use std::io::Cursor;
 
     fn written_file(build: impl FnOnce(&mut OgawaWriter<Cursor<Vec<u8>>>) -> GroupRef) -> Vec<u8> {

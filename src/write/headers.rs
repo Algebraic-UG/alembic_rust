@@ -7,7 +7,7 @@ use crate::format::layout::{
     HOMOGENEOUS_FLAG, METADATA_INDEX_SHIFT, POD_SHIFT, SAMPLES_PER_PROPERTY,
     SCALAR_LIKE_ARRAY_PROPERTY, SCALAR_PROPERTY,
 };
-use crate::metadata_dictionary::{MetaDataDictionary, MetaDataIndex};
+use crate::write::metadata_dictionary::{MetaDataDictionary, MetaDataIndex};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum PropertyLayout {

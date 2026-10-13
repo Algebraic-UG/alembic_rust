@@ -119,9 +119,9 @@ fn attributes_of(geom: &[PropertyNode]) -> Vec<PointAttribute> {
 
 #[cfg(test)]
 mod tests {
-    use crate::archive::ArchiveWriter;
-    use crate::points::Attribute;
     use crate::read::{ArchiveReader, ArrayHandle, AttributeValues, Points, read_archive};
+    use crate::write::ArchiveWriter;
+    use crate::write::Attribute;
     use std::io::Cursor;
 
     type Reader = ArchiveReader<Cursor<Vec<u8>>>;
