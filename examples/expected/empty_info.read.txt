@@ -1,0 +1,5 @@
+metadata:
+  _ai_AlembicVersion=Alembic 1.8.12 (written by alembic_rust 0.1.0)
+  _ai_Application=alembic_rust tests
+  _ai_DateWritten=Fri Oct  9 12:00:00 2026
+  _ai_Description=an empty archive

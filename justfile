@@ -12,7 +12,7 @@ cpp_build_dir: get_cpp
 get_cpp:
     git submodule update --init alembic_cpp
 
-test: unit_tests (example "empty") (example "empty_info") (example "unfinished") (example "points") (example "points_edge_cases") (example "points_unfinished") (example "user_data")
+test: unit_tests (read_back "empty") (read_back "empty_info") (read_back "unfinished") (read_back "points") (read_back "points_edge_cases") (read_back "points_unfinished") (read_back "user_data")
 
 unit_tests:
     cargo test --quiet
@@ -21,6 +21,10 @@ unit_tests:
 example name: abcecho archives_dir
     cargo run --quiet --example {{name}} -- {{name}}.abc
     {{abcecho_bin}} {{name}}.abc | tail -n +2 | diff -u {{expected_dir}}/{{name}}.txt -
+
+[working-directory: 'target/abc-archives']
+read_back name: (example name)
+    cargo run --quiet --example read_summary -- {{name}}.abc | diff -u {{expected_dir}}/{{name}}.read.txt -
 
 archives_dir:
     mkdir -p target/abc-archives

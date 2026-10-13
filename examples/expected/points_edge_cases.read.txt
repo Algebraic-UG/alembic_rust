@@ -1,0 +1,17 @@
+metadata:
+  _ai_AlembicVersion=Alembic 1.8.12 (written by alembic_rust 0.1.0)
+points no_points: 0 points
+  bounds: [1.7976931348623157e308, 1.7976931348623157e308, 1.7976931348623157e308, -1.7976931348623157e308, -1.7976931348623157e308, -1.7976931348623157e308]
+  positions: []
+  velocities: []
+  widths: []
+  attribute Cd: []
+points one_point: 1 points
+  bounds: [1.0, 2.0, 3.0, 1.0, 2.0, 3.0]
+  positions: [[1.0, 2.0, 3.0]]
+  widths: [0.5]
+  attribute Cd: [[0.0, 1.0, 0.0]]
+points aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: 2 points
+  bounds: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  positions: [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+  attribute aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: [1.0, 2.0]
