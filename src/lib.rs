@@ -5,6 +5,7 @@ mod archive;
 mod data_type;
 mod error;
 mod hash;
+mod headers;
 mod metadata;
 mod names;
 mod ogawa;

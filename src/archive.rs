@@ -5,7 +5,7 @@ use std::path::Path;
 use byteorder::{LittleEndian, WriteBytesExt};
 
 use crate::error::{Error, Result};
-use crate::metadata::{MetaData, MetaDataMap};
+use crate::metadata::{MetaData, MetaDataDictionary};
 use crate::ogawa::{Child, DataRef, GroupRef, OgawaWriter};
 
 const ABC_OGAWA_FILE_VERSION: i32 = 0;
@@ -17,7 +17,7 @@ pub struct ArchiveWriter<W: Write + Seek> {
     abc_version: DataRef,
     library_version: DataRef,
     metadata: MetaData,
-    metadata_map: MetaDataMap,
+    metadata_map: MetaDataDictionary,
     poisoned: bool,
 }
 
@@ -37,7 +37,7 @@ impl<W: Write + Seek> ArchiveWriter<W> {
             abc_version,
             library_version,
             metadata: MetaData::new(),
-            metadata_map: MetaDataMap::default(),
+            metadata_map: MetaDataDictionary::default(),
             poisoned: false,
         })
     }
