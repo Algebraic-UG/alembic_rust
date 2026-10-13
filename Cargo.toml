@@ -2,6 +2,9 @@
 name = "alembic_rust"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.88"
+description = "A streaming writer and reader for Alembic Ogawa archives of points"
+license = "MIT"
 
 [dependencies]
 bytemuck = "1.25.2"
