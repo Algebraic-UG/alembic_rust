@@ -8,6 +8,15 @@ pub enum Error {
     #[error("metadata {what} {text:?} contains a separator character (';' or '=')")]
     InvalidMetaData { what: &'static str, text: String },
 
+    #[error("name {name:?} is empty or contains '/'")]
+    InvalidName { name: String },
+
+    #[error("name {name:?} is already used by a sibling")]
+    DuplicateName { name: String },
+
+    #[error("{what} is too long to be stored in a 32-bit length field")]
+    TooLong { what: &'static str },
+
     #[error("archive exceeds the maximum Ogawa file size")]
     FileTooLarge,
 

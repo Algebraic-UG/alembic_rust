@@ -4,6 +4,7 @@ compile_error!("Ogawa archives can only be written on little-endian targets");
 mod archive;
 mod error;
 mod metadata;
+mod names;
 mod ogawa;
 
 pub use archive::ArchiveWriter;
