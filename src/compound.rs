@@ -20,6 +20,10 @@ impl CompoundWriter {
         Self::default()
     }
 
+    pub(crate) fn is_empty(&self) -> bool {
+        self.property_groups.is_empty()
+    }
+
     pub(crate) fn add_array<W: Write + Seek>(
         &mut self,
         output: &mut ArchiveOutput<W>,

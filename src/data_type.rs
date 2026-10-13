@@ -7,6 +7,14 @@ pub(crate) enum Pod {
 }
 
 impl Pod {
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Pod::Uint64 => "uint64_t",
+            Pod::Float32 => "float32_t",
+            Pod::Float64 => "float64_t",
+        }
+    }
+
     pub(crate) fn byte_width(self) -> usize {
         match self {
             Pod::Float32 => 4,
