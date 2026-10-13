@@ -10,26 +10,42 @@ use crate::read::archive::ArrayHandle;
 use crate::read::ogawa::OgawaReader;
 use crate::read::tree::{ObjectNode, PropertyNode, PropertyValue};
 
+/// A points object read from an archive.
 #[derive(Debug, Clone)]
 pub struct Points {
+    /// The object's name.
     pub name: String,
+    /// The bounding box `.selfBnds` as `[min_x, min_y, min_z, max_x, max_y, max_z]`.
+    ///
+    /// For an object without points, the minimum is [`f64::MAX`] and the maximum [`f64::MIN`].
     pub bounds: Option<[f64; 6]>,
+    /// The positions `P`.
     pub positions: ArrayHandle<[f32; 3]>,
+    /// The `.velocities`, if written.
     pub velocities: Option<ArrayHandle<[f32; 3]>>,
+    /// The `.widths`, if written.
     pub widths: Option<ArrayHandle<f32>>,
+    /// The attributes in `.arbGeomParams`, in file order.
     pub attributes: Vec<PointAttribute>,
 }
 
+/// A per-point attribute of a [`Points`] object.
 #[derive(Debug, Clone)]
 pub struct PointAttribute {
+    /// The attribute's name.
     pub name: String,
+    /// Where the attribute's values are stored.
     pub values: AttributeValues,
 }
 
+/// The values of a [`PointAttribute`], by number of components.
 #[derive(Debug, Clone, Copy)]
 pub enum AttributeValues {
+    /// One float per point.
     Float1(ArrayHandle<f32>),
+    /// Two floats per point.
     Float2(ArrayHandle<[f32; 2]>),
+    /// Three floats per point.
     Float3(ArrayHandle<[f32; 3]>),
 }
 

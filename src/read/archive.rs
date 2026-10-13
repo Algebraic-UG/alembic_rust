@@ -9,19 +9,29 @@ use crate::read::ogawa::{DataSpan, OgawaReader};
 use crate::read::points::{Points, points_among};
 use crate::read::tree::{FirstSample, PropertyValue, walk_hierarchy};
 
+/// The structure of an archive, as returned by [`read_archive`].
 #[derive(Debug, Clone)]
 pub struct ArchiveContents {
+    /// The archive metadata.
     pub metadata: MetaData,
+    /// The points objects, in file order.
     pub points: Vec<Points>,
+    /// The user data blobs, in file order.
     pub user_data: Vec<UserData>,
 }
 
+/// A binary blob written with [`ArchiveWriter::user_data`](crate::ArchiveWriter::user_data).
 #[derive(Debug, Clone)]
 pub struct UserData {
+    /// The blob's name.
     pub name: String,
+    /// Where the blob's bytes are stored.
     pub bytes: ArrayHandle<u8>,
 }
 
+/// Where an array of `T` is stored in the archive.
+///
+/// Pass it to [`ArchiveReader::read_into`] to read the values.
 #[derive(Debug, Clone, Copy)]
 pub struct ArrayHandle<T> {
     values: DataSpan,
@@ -30,10 +40,12 @@ pub struct ArrayHandle<T> {
 }
 
 impl<T> ArrayHandle<T> {
+    /// The number of elements, which is the buffer length `read_into` expects.
     pub fn len(&self) -> usize {
         self.len
     }
 
+    /// Whether the array has no elements.
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
@@ -47,11 +59,18 @@ impl<T> ArrayHandle<T> {
     }
 }
 
+/// Reads array values from an archive opened with [`read_archive`].
 pub struct ArchiveReader<R: Read + Seek> {
     ogawa: OgawaReader<R>,
 }
 
 impl<R: Read + Seek> ArchiveReader<R> {
+    /// Reads the array behind `handle` into `destination`, without allocating.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::BufferLengthMismatch`] if `destination` does not hold exactly
+    /// [`handle.len()`](ArrayHandle::len) elements, and [`Error::Io`] if reading fails.
     pub fn read_into<T: bytemuck::Pod>(
         &mut self,
         handle: &ArrayHandle<T>,
@@ -68,6 +87,18 @@ impl<R: Read + Seek> ArchiveReader<R> {
     }
 }
 
+/// Reads the structure of an archive written by this library.
+///
+/// This reads names, metadata, bounds and where each array is stored, but no array values;
+/// those are read on demand with the returned [`ArchiveReader`]. Objects without `P`,
+/// properties of other types and anything else unrecognised are skipped. Only the first sample
+/// of each property is read, and stored versions, hashes and time sampling are not checked.
+///
+/// # Errors
+///
+/// [`Error::NotOgawa`] if `source` is not an Ogawa file, [`Error::Incomplete`] if the archive
+/// was never finished, [`Error::Corrupt`] if a record runs past the end of the file or the root
+/// is not an Alembic root, and [`Error::Io`] if reading fails.
 pub fn read_archive<R: Read + Seek>(source: R) -> Result<(ArchiveContents, ArchiveReader<R>)> {
     let (mut ogawa, root) = OgawaReader::open(source)?;
     let [
