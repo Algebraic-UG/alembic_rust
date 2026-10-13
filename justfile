@@ -12,7 +12,7 @@ cpp_build_dir: get_cpp
 get_cpp:
     git submodule update --init alembic_cpp
 
-test: unit_tests (example "empty") (example "empty_info") (example "unfinished") (example "points") (example "points_edge_cases") (example "points_unfinished")
+test: unit_tests (example "empty") (example "empty_info") (example "unfinished") (example "points") (example "points_edge_cases") (example "points_unfinished") (example "user_data")
 
 unit_tests:
     cargo test --quiet

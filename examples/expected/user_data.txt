@@ -1,0 +1,10 @@
+user_data.abc
+  (file doesn't have any ArchiveInfo)
+
+  ArrayProperty name=every_byte_value;interpretation=;datatype=uint8_t;arraysize=256;numsamps=1
+  ArrayProperty name=empty;interpretation=;datatype=uint8_t;arraysize=0;numsamps=1
+Object name=/particles
+  CompoundProperty name=.geom;schema=AbcGeom_Points_v1
+    ArrayProperty name=P;interpretation=point;datatype=float32_t[3];arraysize=2;numsamps=1
+    ScalarProperty name=.selfBnds;interpretation=box;datatype=float64_t[6];arraysize=6;numsamps=1
+    ArrayProperty name=.pointIds;interpretation=;datatype=uint64_t;arraysize=0;numsamps=1
