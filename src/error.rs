@@ -1,6 +1,10 @@
 use std::io;
 
 /// Errors of the writer and the reader.
+///
+/// Besides the errors listed on each function, any call that writes can fail with
+/// [`Io`](Error::Io), [`Poisoned`](Error::Poisoned), [`FileTooLarge`](Error::FileTooLarge) or
+/// [`TooLong`](Error::TooLong).
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// Reading or writing the stream failed.
