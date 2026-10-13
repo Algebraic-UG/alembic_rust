@@ -21,6 +21,16 @@ impl DataSpan {
     pub(crate) fn len(self) -> u64 {
         self.len
     }
+
+    pub(crate) fn after_prefix(self, prefix_len: u64) -> DataSpan {
+        match self.len.checked_sub(prefix_len) {
+            Some(len) if len > 0 => DataSpan {
+                payload_start: self.payload_start + prefix_len,
+                len,
+            },
+            _ => DataSpan::EMPTY,
+        }
+    }
 }
 
 pub(crate) struct OgawaReader<R: Read + Seek> {
@@ -54,6 +64,10 @@ impl<R: Read + Seek> OgawaReader<R> {
         let root_at = ROOT_POSITION_OFFSET as usize;
         let root_position = u64::from_le_bytes(header[root_at..root_at + 8].try_into().unwrap());
         Ok((OgawaReader { source, file_len }, GroupRef(root_position)))
+    }
+
+    pub(crate) fn file_len(&self) -> u64 {
+        self.file_len
     }
 
     pub(crate) fn read_group(&mut self, group: GroupRef) -> Result<Vec<Child>> {
@@ -225,6 +239,24 @@ mod tests {
         reader.read_into(span, 10, &mut []).unwrap();
         corruption_of(reader.read_into(span, 7, &mut middle));
         corruption_of(reader.read_into(span, u64::MAX, &mut middle));
+    }
+
+    #[test]
+    fn spans_after_a_prefix() {
+        let span = DataSpan {
+            payload_start: 100,
+            len: 20,
+        };
+        assert_eq!(
+            span.after_prefix(16),
+            DataSpan {
+                payload_start: 116,
+                len: 4
+            }
+        );
+        assert_eq!(span.after_prefix(20), DataSpan::EMPTY);
+        assert_eq!(span.after_prefix(21), DataSpan::EMPTY);
+        assert_eq!(DataSpan::EMPTY.after_prefix(16), DataSpan::EMPTY);
     }
 
     #[test]

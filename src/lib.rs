@@ -12,7 +12,6 @@ mod names;
 mod ogawa;
 mod output;
 mod points;
-#[allow(dead_code)]
 mod read;
 
 #[cfg(test)]
@@ -22,3 +21,4 @@ pub use archive::ArchiveWriter;
 pub use error::{Error, Result};
 pub use metadata::MetaData;
 pub use points::{Attribute, PointsWriter};
+pub use read::{ArchiveContents, ArchiveReader, ArrayHandle, UserData, read_archive};

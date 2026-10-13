@@ -14,7 +14,7 @@ use crate::names::SiblingNames;
 use crate::ogawa::{Child, DataRef, GroupRef, OgawaWriter};
 use crate::output::ArchiveOutput;
 
-const ALEMBIC_OGAWA_FILE_VERSION: i32 = 0;
+pub(crate) const ALEMBIC_OGAWA_FILE_VERSION: i32 = 0;
 const ALEMBIC_LIBRARY_VERSION_1_8_12: i32 = 10812;
 const ALEMBIC_VERSION_KEY: &str = "_ai_AlembicVersion";
 const ALEMBIC_VERSION_VALUE: &str = concat!(
@@ -22,7 +22,7 @@ const ALEMBIC_VERSION_VALUE: &str = concat!(
     env!("CARGO_PKG_VERSION"),
     ")"
 );
-const USER_DATA_BYTE: DataType = DataType::new(Pod::Uint8, 1);
+pub(crate) const USER_DATA_BYTE: DataType = DataType::new(Pod::Uint8, 1);
 
 pub struct ArchiveWriter<W: Write + Seek> {
     output: ArchiveOutput<W>,

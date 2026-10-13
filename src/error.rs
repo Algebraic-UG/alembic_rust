@@ -45,6 +45,9 @@ pub enum Error {
 
     #[error("corrupt archive: {what}")]
     Corrupt { what: &'static str },
+
+    #[error("buffer holds {actual} elements but the array has {expected}")]
+    BufferLengthMismatch { expected: usize, actual: usize },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
