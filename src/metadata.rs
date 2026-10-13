@@ -27,6 +27,35 @@ impl MetaData {
         self.entries_sorted_by_key.get(key).map(String::as_str)
     }
 
+    pub(crate) fn deserialize(serialized: &str) -> MetaData {
+        let mut metadata = MetaData::new();
+        let mut rest = serialized;
+        loop {
+            let pair_end = rest.find(PAIR_SEPARATOR);
+            let assignment = rest.find(ASSIGNMENT_SEPARATOR);
+            let assignment_belongs_to_a_later_pair = match (assignment, pair_end) {
+                (Some(assignment), Some(pair_end)) => assignment > pair_end,
+                (None, Some(_)) => true,
+                _ => false,
+            };
+            if assignment_belongs_to_a_later_pair {
+                return metadata;
+            }
+            if let Some(assignment) = assignment {
+                let key = &rest[..assignment];
+                let value = &rest[assignment + 1..pair_end.unwrap_or(rest.len())];
+                metadata
+                    .entries_sorted_by_key
+                    .entry(key.to_owned())
+                    .or_insert_with(|| value.to_owned());
+            }
+            match pair_end {
+                Some(pair_end) => rest = &rest[pair_end + 1..],
+                None => return metadata,
+            }
+        }
+    }
+
     pub(crate) fn serialize(&self) -> String {
         let mut serialized = String::new();
         let non_empty_entries = self
@@ -63,7 +92,7 @@ pub(crate) enum MetaDataIndex {
 }
 
 const EMPTY_INDEX: u8 = 0;
-const INLINE_INDEX: u8 = 255;
+pub(crate) const INLINE_INDEX: u8 = 255;
 const DICTIONARY_CAPACITY: usize = 254;
 const LONGEST_DICTIONARY_ENTRY: usize = 255;
 
@@ -126,6 +155,33 @@ mod tests {
         md.set("geoScope", "var").unwrap();
         assert_eq!(md.serialize(), "geoScope=var;schema=AbcGeom_Points_v1");
         assert_eq!(MetaData::new().serialize(), "");
+    }
+
+    #[test]
+    fn deserializes_like_upstream() {
+        let md = MetaData::deserialize("b=2;a=1;eq=x=y;empty=;b=dup");
+        assert_eq!(md.get("a"), Some("1"));
+        assert_eq!(md.get("b"), Some("2"));
+        assert_eq!(md.get("eq"), Some("x=y"));
+        assert_eq!(md.get("empty"), Some(""));
+        assert_eq!(MetaData::deserialize(""), MetaData::new());
+        assert_eq!(MetaData::deserialize("a=1;"), MetaData::deserialize("a=1"));
+    }
+
+    #[test]
+    fn deserializing_stops_at_a_pair_without_assignment() {
+        let md = MetaData::deserialize("a=1;broken;c=3");
+        assert_eq!(md.get("a"), Some("1"));
+        assert_eq!(md.get("c"), None);
+        assert_eq!(MetaData::deserialize("broken"), MetaData::new());
+    }
+
+    #[test]
+    fn deserialize_reverses_serialize() {
+        let mut md = MetaData::new();
+        md.set("schema", "AbcGeom_Points_v1").unwrap();
+        md.set("geoScope", "var").unwrap();
+        assert_eq!(MetaData::deserialize(&md.serialize()), md);
     }
 
     #[test]

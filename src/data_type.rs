@@ -8,6 +8,16 @@ pub(crate) enum Pod {
 }
 
 impl Pod {
+    pub(crate) fn from_code(code: u8) -> Option<Pod> {
+        match code {
+            1 => Some(Pod::Uint8),
+            7 => Some(Pod::Uint64),
+            10 => Some(Pod::Float32),
+            11 => Some(Pod::Float64),
+            _ => None,
+        }
+    }
+
     pub(crate) fn name(self) -> &'static str {
         match self {
             Pod::Uint8 => "uint8_t",
