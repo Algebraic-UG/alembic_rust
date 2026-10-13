@@ -1,6 +1,6 @@
 # alembic_rust
 
-A small, streaming writer for [Alembic](https://www.alembic.io/) `.abc` files, written in pure Rust.
+A small, streaming writer and reader for [Alembic](https://www.alembic.io/) `.abc` files, written in pure Rust.
 
 It writes one specific kind of archive:
 
@@ -11,7 +11,7 @@ It writes one specific kind of archive:
 
 The output follows the layout of Alembic 1.8.12. It writes the same property names, order and metadata as upstream's `OPointsSchema`, so Alembic-aware tools read it as ordinary points.
 
-The library only writes. It has no reader.
+The reader is meant for the archives this library writes. It skips anything it doesn't recognise.
 
 ## Usage
 
@@ -43,7 +43,40 @@ More complete programs are in [`examples/`](examples/):
 
 ```sh
 cargo run --example points -- out.abc
+cargo run --example read_summary -- out.abc
 ```
+
+### Reading
+
+```rust
+use std::fs::File;
+
+use alembic_rust::{AttributeValues, read_archive};
+
+fn main() -> alembic_rust::Result<()> {
+    let (contents, mut reader) = read_archive(File::open("particles.abc")?)?;
+    println!("written by {:?}", contents.metadata.get("_ai_Application"));
+
+    for points in &contents.points {
+        let mut positions = vec![[0.0f32; 3]; points.positions.len()];
+        reader.read_into(&points.positions, &mut positions)?;
+
+        for attribute in &points.attributes {
+            if let AttributeValues::Float1(values) = &attribute.values {
+                let mut buffer = vec![0.0f32; values.len()];
+                reader.read_into(values, &mut buffer)?;
+            }
+        }
+    }
+    for blob in &contents.user_data {
+        let mut bytes = vec![0u8; blob.bytes.len()];
+        reader.read_into(&blob.bytes, &mut bytes)?;
+    }
+    Ok(())
+}
+```
+
+`read_archive` accepts any `Read + Seek` stream. It reads only the archive's structure: names, metadata, bounds, and where each array is stored. Array values are read only when you call `read_into`, straight into a buffer you provide, so the reader never allocates memory for bulk data.
 
 ## Testing
 
@@ -56,18 +89,19 @@ This runs the unit tests (`cargo test`), then validates real files with upstream
 1. It builds upstream's `abcecho` tool from the `alembic_cpp` submodule (`just abcecho`).
 2. Each listed example `examples/<name>.rs` writes `target/abc-archives/<name>.abc`.
 3. `abcecho` reads each archive. Its output is compared with `examples/expected/<name>.txt`, ignoring the first line, which contains abcecho's build date.
+4. `examples/read_summary.rs` reads each archive back with this library's reader and prints everything, values included. Its output is compared with `examples/expected/<name>.read.txt`.
 
-The recipe fails if an example fails or any output differs. You can check a single example with `just example points`.
+The recipe fails if an example fails or any output differs. You can check a single example with `just read_back points`, or only the abcecho part with `just example points`.
 
 To add a case:
 
 1. Add `examples/<name>.rs`.
-2. Add its expected output as `examples/expected/<name>.txt`.
-3. Append `(example "<name>")` to the `test` recipe in the `justfile`.
+2. Add its expected outputs as `examples/expected/<name>.txt` (abcecho) and `examples/expected/<name>.read.txt` (read-back).
+3. Append `(read_back "<name>")` to the `test` recipe in the `justfile`.
 
-`abcecho` checks that a file parses and shows its structure: objects, properties, types, metadata and sample counts. It does not print values, so unit tests cover data correctness.
+`abcecho` checks that upstream Alembic can parse a file and shows its structure: objects, properties, types, metadata and sample counts. It does not print values. The read-back check covers values.
 
-`examples/expected/empty_info.txt` and `examples/expected/points.txt` contain the crate version (`written by alembic_rust 0.1.0`) and need updating when it changes.
+The expected outputs contain the crate version (`written by alembic_rust 0.1.0`): `empty_info.txt`, `points.txt` and every `.read.txt` of a finished archive. They need updating when the version changes.
 
 ### Requirements for `just test`
 
