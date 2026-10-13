@@ -81,6 +81,8 @@ fn main() -> alembic_rust::Result<()> {
 
 `read_archive` accepts any `Read + Seek` stream. It reads only the archive's structure: names, metadata, bounds, and where each array is stored. Array values are read only when you call `read_into`, straight into a buffer you provide, so the reader never allocates memory for bulk data.
 
+The API documentation, including every error, is in the rustdoc: `cargo doc --open`.
+
 ## Testing
 
 ```sh
