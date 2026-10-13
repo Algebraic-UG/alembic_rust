@@ -185,7 +185,7 @@ impl<R: Read + Seek> Walker<'_, R> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::archive::ArchiveWriter;
     use crate::data_type::Pod;
@@ -193,7 +193,7 @@ mod tests {
     use crate::points::Attribute;
     use std::io::Cursor;
 
-    fn hierarchy_of(file: Vec<u8>) -> Hierarchy {
+    pub(crate) fn hierarchy_of(file: Vec<u8>) -> Hierarchy {
         let (mut ogawa, root) = OgawaReader::open(Cursor::new(file)).unwrap();
         let root_children = ogawa.read_group(root).unwrap();
         let (Child::Group(top_object), Child::Data(dictionary)) =
