@@ -12,6 +12,8 @@ mod names;
 mod ogawa;
 mod output;
 mod points;
+#[allow(dead_code)]
+mod read;
 
 #[cfg(test)]
 mod structure_tests;

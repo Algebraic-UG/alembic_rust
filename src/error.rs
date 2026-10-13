@@ -33,6 +33,18 @@ pub enum Error {
 
     #[error("archive is unusable because an earlier write failed")]
     Poisoned,
+
+    #[error("not an Ogawa archive")]
+    NotOgawa,
+
+    #[error("archive was never finished: its frozen flag is not set")]
+    Incomplete,
+
+    #[error("unsupported {what} version {version}")]
+    UnsupportedVersion { what: &'static str, version: i64 },
+
+    #[error("corrupt archive: {what}")]
+    Corrupt { what: &'static str },
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
