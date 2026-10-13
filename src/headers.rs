@@ -7,13 +7,11 @@ use crate::metadata::{MetaDataDictionary, MetaDataIndex};
 pub(crate) const PROPERTY_TYPE_MASK: u32 = 0b11;
 pub(crate) const COMPOUND_PROPERTY: u32 = 0;
 pub(crate) const SCALAR_PROPERTY: u32 = 1;
-pub(crate) const ARRAY_PROPERTY: u32 = 2;
-pub(crate) const SCALAR_LIKE_ARRAY_PROPERTY: u32 = 3;
+const ARRAY_PROPERTY: u32 = 2;
+const SCALAR_LIKE_ARRAY_PROPERTY: u32 = 3;
 
 pub(crate) const FIELD_WIDTH_SHIFT: u32 = 2;
 pub(crate) const POD_SHIFT: u32 = 4;
-pub(crate) const TIME_SAMPLING_INDEX_FLAG: u32 = 1 << 8;
-pub(crate) const CHANGED_SAMPLE_RANGE_FLAG: u32 = 1 << 9;
 const HOMOGENEOUS_FLAG: u32 = 1 << 10;
 const CONSTANT_FLAG: u32 = 1 << 11;
 pub(crate) const EXTENT_SHIFT: u32 = 12;

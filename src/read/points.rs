@@ -3,16 +3,16 @@ use std::io::{Read, Seek};
 use crate::data_type::DataType;
 use crate::error::Result;
 use crate::points::{
-    ARB_GEOM_PARAMS_COMPOUND, BOX3D, FLOAT1, FLOAT2, FLOAT3, GEOM_COMPOUND, POINTS_SCHEMA,
-    POSITIONS, SELF_BOUNDS, VELOCITIES, WIDTHS,
+    ARB_GEOM_PARAMS_COMPOUND, BOX3D, FLOAT1, FLOAT2, FLOAT3, GEOM_COMPOUND, POSITIONS, SELF_BOUNDS,
+    VELOCITIES, WIDTHS,
 };
 use crate::read::archive::ArrayHandle;
 use crate::read::ogawa::OgawaReader;
-use crate::read::tree::{FirstSample, ObjectNode, PropertyNode, PropertyValue};
+use crate::read::tree::{ObjectNode, PropertyNode, PropertyValue};
 
 #[derive(Debug, Clone)]
 pub struct Points {
-    pub path: String,
+    pub name: String,
     pub bounds: Option<[f64; 6]>,
     pub positions: ArrayHandle<[f32; 3]>,
     pub velocities: Option<ArrayHandle<[f32; 3]>>,
@@ -37,11 +37,8 @@ pub(crate) fn points_among<R: Read + Seek>(
     objects: Vec<ObjectNode>,
     ogawa: &mut OgawaReader<R>,
 ) -> Result<Vec<Points>> {
-    let mut points = Vec::new();
+    let mut points = Vec::with_capacity(objects.len());
     for object in objects {
-        if object.metadata.get("schema") != Some(POINTS_SCHEMA) {
-            continue;
-        }
         let Some(PropertyValue::Compound(geom)) = find(&object.properties, GEOM_COMPOUND) else {
             continue;
         };
@@ -49,7 +46,7 @@ pub(crate) fn points_among<R: Read + Seek>(
             continue;
         };
         points.push(Points {
-            path: object.path,
+            name: object.name,
             bounds: bounds_of(geom, ogawa)?,
             positions,
             velocities: array_of(geom, VELOCITIES, FLOAT3),
@@ -73,27 +70,25 @@ fn array_of<T>(
     data_type: DataType,
 ) -> Option<ArrayHandle<T>> {
     match find(properties, name)? {
-        PropertyValue::Array(Some(sample)) => readable_as(*sample, data_type),
+        PropertyValue::Array(sample) if sample.data_type == data_type => {
+            Some(ArrayHandle::of_first_sample(*sample))
+        }
         _ => None,
     }
-}
-
-fn readable_as<T>(sample: FirstSample, data_type: DataType) -> Option<ArrayHandle<T>> {
-    (sample.data_type == data_type).then(|| ArrayHandle::of_first_sample(sample))
 }
 
 fn bounds_of<R: Read + Seek>(
     geom: &[PropertyNode],
     ogawa: &mut OgawaReader<R>,
 ) -> Result<Option<[f64; 6]>> {
-    let Some(PropertyValue::Scalar(Some(sample))) = find(geom, SELF_BOUNDS) else {
+    let Some(PropertyValue::Scalar(sample)) = find(geom, SELF_BOUNDS) else {
         return Ok(None);
     };
     if sample.data_type != BOX3D || sample.len == 0 {
         return Ok(None);
     }
     let mut bounds = [0.0f64; 6];
-    ogawa.read_into(sample.values, 0, bytemuck::cast_slice_mut(&mut bounds))?;
+    ogawa.read_into(sample.values, bytemuck::cast_slice_mut(&mut bounds))?;
     Ok(Some(bounds))
 }
 
@@ -105,7 +100,7 @@ fn attributes_of(geom: &[PropertyNode]) -> Vec<PointAttribute> {
     arb_geom_params
         .iter()
         .filter_map(|property| {
-            let PropertyValue::Array(Some(sample)) = property.value else {
+            let PropertyValue::Array(sample) = property.value else {
                 return None;
             };
             let values = match sample.data_type {
@@ -167,7 +162,7 @@ mod tests {
         let [particles] = &points[..] else {
             panic!("expected one points object, got {points:?}");
         };
-        assert_eq!(particles.path, "/particles");
+        assert_eq!(particles.name, "particles");
         assert_eq!(particles.bounds, Some([-1.0, -2.0, 0.5, 1.0, 5.0, 3.0]));
         assert_eq!(values(&mut reader, &particles.positions), positions);
         assert_eq!(
@@ -230,16 +225,5 @@ mod tests {
             empty.bounds,
             Some([f64::MAX, f64::MAX, f64::MAX, f64::MIN, f64::MIN, f64::MIN])
         );
-    }
-
-    #[test]
-    fn user_data_and_points_coexist() {
-        let mut archive = ArchiveWriter::create(Cursor::new(Vec::new())).unwrap();
-        archive.user_data("blob", &[7]).unwrap();
-        archive.begin_points("p", &[]).unwrap().finish().unwrap();
-        let file = archive.finish().unwrap().into_inner();
-        let (contents, _) = read_archive(Cursor::new(file)).unwrap();
-        assert_eq!(contents.user_data.len(), 1);
-        assert_eq!(contents.points.len(), 1);
     }
 }

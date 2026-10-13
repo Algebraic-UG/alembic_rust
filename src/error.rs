@@ -40,9 +40,6 @@ pub enum Error {
     #[error("archive was never finished: its frozen flag is not set")]
     Incomplete,
 
-    #[error("unsupported {what} version {version}")]
-    UnsupportedVersion { what: &'static str, version: i64 },
-
     #[error("corrupt archive: {what}")]
     Corrupt { what: &'static str },
 

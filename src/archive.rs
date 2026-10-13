@@ -14,7 +14,7 @@ use crate::names::SiblingNames;
 use crate::ogawa::{Child, DataRef, GroupRef, OgawaWriter};
 use crate::output::ArchiveOutput;
 
-pub(crate) const ALEMBIC_OGAWA_FILE_VERSION: i32 = 0;
+const ALEMBIC_OGAWA_FILE_VERSION: i32 = 0;
 const ALEMBIC_LIBRARY_VERSION_1_8_12: i32 = 10812;
 const ALEMBIC_VERSION_KEY: &str = "_ai_AlembicVersion";
 const ALEMBIC_VERSION_VALUE: &str = concat!(

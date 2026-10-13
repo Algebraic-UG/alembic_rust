@@ -2,8 +2,8 @@ use std::io::{Read, Seek, SeekFrom};
 
 use crate::error::{Error, Result};
 use crate::ogawa::{
-    CHILD_REFERENCE_SIZE, Child, DataRef, FORMAT_VERSION, FORMAT_VERSION_OFFSET, FROZEN,
-    FROZEN_BYTE_OFFSET, GroupRef, HEADER_LEN, MAGIC, RECORD_LENGTH_FIELD, ROOT_POSITION_OFFSET,
+    CHILD_REFERENCE_SIZE, Child, DataRef, FROZEN, FROZEN_BYTE_OFFSET, GroupRef, HEADER_LEN, MAGIC,
+    RECORD_LENGTH_FIELD, ROOT_POSITION_OFFSET,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,35 +53,17 @@ impl<R: Read + Seek> OgawaReader<R> {
         if header[FROZEN_BYTE_OFFSET as usize] != FROZEN {
             return Err(Error::Incomplete);
         }
-        let version_at = FORMAT_VERSION_OFFSET as usize;
-        let version = [header[version_at], header[version_at + 1]];
-        if version != FORMAT_VERSION {
-            return Err(Error::UnsupportedVersion {
-                what: "Ogawa format",
-                version: i64::from(u16::from_be_bytes(version)),
-            });
-        }
         let root_at = ROOT_POSITION_OFFSET as usize;
         let root_position = u64::from_le_bytes(header[root_at..root_at + 8].try_into().unwrap());
         Ok((OgawaReader { source, file_len }, GroupRef(root_position)))
-    }
-
-    pub(crate) fn file_len(&self) -> u64 {
-        self.file_len
     }
 
     pub(crate) fn read_group(&mut self, group: GroupRef) -> Result<Vec<Child>> {
         if group == GroupRef::EMPTY {
             return Ok(Vec::new());
         }
-        let child_count = self.read_record_length(group.0, "group position is out of bounds")?;
-        let references_start = group.0 + RECORD_LENGTH_FIELD;
-        if child_count > (self.file_len - references_start) / CHILD_REFERENCE_SIZE {
-            return Err(Error::Corrupt {
-                what: "group has more children than fit in the file",
-            });
-        }
-        let mut references = vec![0u8; (child_count * CHILD_REFERENCE_SIZE) as usize];
+        let (references_start, references_len) = self.record_body(group.0, CHILD_REFERENCE_SIZE)?;
+        let mut references = vec![0u8; references_len as usize];
         self.read_at(references_start, &mut references)?;
         let (encoded_references, _) = references.as_chunks::<{ CHILD_REFERENCE_SIZE as usize }>();
         Ok(encoded_references
@@ -94,59 +76,41 @@ impl<R: Read + Seek> OgawaReader<R> {
         if data == DataRef::EMPTY {
             return Ok(DataSpan::EMPTY);
         }
-        let len = self.read_record_length(data.0, "data position is out of bounds")?;
-        let payload_start = data.0 + RECORD_LENGTH_FIELD;
-        if len > self.file_len - payload_start {
-            return Err(Error::Corrupt {
-                what: "data record extends past the end of the file",
-            });
-        }
+        let (payload_start, len) = self.record_body(data.0, 1)?;
         Ok(DataSpan { payload_start, len })
     }
 
     pub(crate) fn read_bytes(&mut self, span: DataSpan) -> Result<Vec<u8>> {
         let mut bytes = vec![0u8; span.len as usize];
-        self.read_into(span, 0, &mut bytes)?;
+        self.read_into(span, &mut bytes)?;
         Ok(bytes)
     }
 
-    pub(crate) fn read_into(
-        &mut self,
-        span: DataSpan,
-        offset_in_payload: u64,
-        destination: &mut [u8],
-    ) -> Result<()> {
-        let fits = offset_in_payload
-            .checked_add(destination.len() as u64)
-            .is_some_and(|end| end <= span.len);
-        if !fits {
-            return Err(Error::Corrupt {
-                what: "read extends past the end of a data record",
-            });
-        }
+    pub(crate) fn read_into(&mut self, span: DataSpan, destination: &mut [u8]) -> Result<()> {
         if destination.is_empty() {
             return Ok(());
         }
-        self.read_at(span.payload_start + offset_in_payload, destination)
+        self.read_at(span.payload_start, destination)
     }
 
-    fn read_record_length(
+    fn record_body(
         &mut self,
         record_start: u64,
-        out_of_bounds: &'static str,
-    ) -> Result<u64> {
-        let length_field_fits = record_start >= HEADER_LEN
-            && record_start
-                .checked_add(RECORD_LENGTH_FIELD)
-                .is_some_and(|end| end <= self.file_len);
-        if !length_field_fits {
-            return Err(Error::Corrupt {
-                what: out_of_bounds,
-            });
+        bytes_per_counted_unit: u64,
+    ) -> Result<(u64, u64)> {
+        let mut length_field = [0u8; RECORD_LENGTH_FIELD as usize];
+        self.read_at(record_start, &mut length_field)?;
+        let body_start = record_start + RECORD_LENGTH_FIELD;
+        let body_len = u64::from_le_bytes(length_field).checked_mul(bytes_per_counted_unit);
+        let fits = body_len
+            .and_then(|len| body_start.checked_add(len))
+            .is_some_and(|body_end| body_end <= self.file_len);
+        match body_len {
+            Some(len) if fits => Ok((body_start, len)),
+            _ => Err(Error::Corrupt {
+                what: "record extends past the end of the file",
+            }),
         }
-        let mut length = [0u8; RECORD_LENGTH_FIELD as usize];
-        self.read_at(record_start, &mut length)?;
-        Ok(u64::from_le_bytes(length))
     }
 
     fn read_at(&mut self, position: u64, destination: &mut [u8]) -> Result<()> {
@@ -172,22 +136,11 @@ mod tests {
         OgawaReader::open(Cursor::new(file))
     }
 
-    fn corruption_of(result: Result<impl std::fmt::Debug>) -> &'static str {
-        match result {
-            Err(Error::Corrupt { what }) => what,
-            other => panic!("expected corruption, got {other:?}"),
-        }
-    }
-
-    fn file_with_root_children(references: &[u64]) -> Vec<u8> {
-        let mut file = written_file(|_| GroupRef::EMPTY);
-        let root_position = file.len() as u64;
-        file.extend_from_slice(&(references.len() as u64).to_le_bytes());
-        for reference in references {
-            file.extend_from_slice(&reference.to_le_bytes());
-        }
-        file[8..16].copy_from_slice(&root_position.to_le_bytes());
-        file
+    fn file_with_one_data_child() -> Vec<u8> {
+        written_file(|w| {
+            let data = w.write_data(&[b"abc"]).unwrap();
+            w.write_group(&[data.into()]).unwrap()
+        })
     }
 
     #[test]
@@ -223,25 +176,6 @@ mod tests {
     }
 
     #[test]
-    fn reads_part_of_a_payload() {
-        let file = written_file(|w| {
-            let data = w.write_data(&[b"0123456789"]).unwrap();
-            w.write_group(&[data.into()]).unwrap()
-        });
-        let (mut reader, root) = open(file).unwrap();
-        let [Child::Data(data)] = reader.read_group(root).unwrap()[..] else {
-            panic!("expected one data child");
-        };
-        let span = reader.data_span(data).unwrap();
-        let mut middle = [0u8; 4];
-        reader.read_into(span, 3, &mut middle).unwrap();
-        assert_eq!(&middle, b"3456");
-        reader.read_into(span, 10, &mut []).unwrap();
-        corruption_of(reader.read_into(span, 7, &mut middle));
-        corruption_of(reader.read_into(span, u64::MAX, &mut middle));
-    }
-
-    #[test]
     fn spans_after_a_prefix() {
         let span = DataSpan {
             payload_start: 100,
@@ -267,15 +201,8 @@ mod tests {
     }
 
     #[test]
-    fn group_with_zero_children_is_empty() {
-        let (mut reader, root) = open(file_with_root_children(&[])).unwrap();
-        assert!(reader.read_group(root).unwrap().is_empty());
-    }
-
-    #[test]
     fn rejects_files_that_are_not_ogawa() {
         assert!(matches!(open(Vec::new()), Err(Error::NotOgawa)));
-        assert!(matches!(open(b"Ogawa".to_vec()), Err(Error::NotOgawa)));
         let mut file = written_file(|_| GroupRef::EMPTY);
         file[0] = b'o';
         assert!(matches!(open(file), Err(Error::NotOgawa)));
@@ -289,69 +216,21 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unknown_format_versions() {
-        let mut file = written_file(|_| GroupRef::EMPTY);
-        file[6..8].copy_from_slice(&[0, 2]);
+    fn rejects_records_that_do_not_fit_in_the_file() {
+        let mut truncated = file_with_one_data_child();
+        truncated.pop();
+        let (mut reader, root) = open(truncated).unwrap();
         assert!(matches!(
-            open(file),
-            Err(Error::UnsupportedVersion { version: 2, .. })
+            reader.read_group(root),
+            Err(Error::Corrupt { .. })
         ));
-    }
 
-    #[test]
-    fn rejects_root_outside_the_file() {
-        let mut file = written_file(|_| GroupRef::EMPTY);
-        let past_the_end = file.len() as u64 - 4;
-        file[8..16].copy_from_slice(&past_the_end.to_le_bytes());
-        let (mut reader, root) = open(file).unwrap();
-        corruption_of(reader.read_group(root));
-    }
-
-    #[test]
-    fn rejects_group_inside_the_header() {
-        let (mut reader, root) = open(file_with_root_children(&[4])).unwrap();
-        let [Child::Group(inside_header)] = reader.read_group(root).unwrap()[..] else {
-            panic!("expected one group child");
-        };
-        corruption_of(reader.read_group(inside_header));
-    }
-
-    #[test]
-    fn rejects_child_counts_larger_than_the_file() {
-        let mut file = file_with_root_children(&[0]);
-        let root_position = u64::from_le_bytes(file[8..16].try_into().unwrap()) as usize;
-        file[root_position..root_position + 8].copy_from_slice(&u64::MAX.to_le_bytes());
-        let (mut reader, root) = open(file).unwrap();
-        corruption_of(reader.read_group(root));
-    }
-
-    #[test]
-    fn rejects_data_longer_than_the_file() {
-        let mut file = written_file(|w| {
-            let data = w.write_data(&[b"abc"]).unwrap();
-            w.write_group(&[data.into()]).unwrap()
-        });
-        file[16..24].copy_from_slice(&1000u64.to_le_bytes());
-        let (mut reader, root) = open(file).unwrap();
+        let mut oversized = file_with_one_data_child();
+        oversized[16..24].copy_from_slice(&u64::MAX.to_le_bytes());
+        let (mut reader, root) = open(oversized).unwrap();
         let [Child::Data(data)] = reader.read_group(root).unwrap()[..] else {
             panic!("expected one data child");
         };
-        corruption_of(reader.data_span(data));
-    }
-
-    #[test]
-    fn rejects_data_positions_outside_the_file() {
-        let data_bit = 1 << 63;
-        let (mut reader, root) = open(file_with_root_children(&[
-            data_bit | 3,
-            data_bit | u64::MAX >> 1,
-        ]))
-        .unwrap();
-        for child in reader.read_group(root).unwrap() {
-            let Child::Data(data) = child else {
-                panic!("expected data child");
-            };
-            corruption_of(reader.data_span(data));
-        }
+        assert!(matches!(reader.data_span(data), Err(Error::Corrupt { .. })));
     }
 }

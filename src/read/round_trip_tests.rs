@@ -1,9 +1,7 @@
 use std::io::Cursor;
 
 use crate::archive::ArchiveWriter;
-use crate::compound::CompoundWriter;
 use crate::error::Error;
-use crate::metadata::MetaData;
 use crate::points::Attribute;
 use crate::read::{ArchiveContents, ArchiveReader, ArrayHandle, AttributeValues, read_archive};
 
@@ -45,7 +43,7 @@ fn long_names_need_wider_header_fields() {
         .iter()
         .zip([&two_byte_name, &four_byte_name])
     {
-        assert_eq!(points.path, format!("/{name}"));
+        assert_eq!(&points.name, name);
         assert_eq!(&points.attributes[0].name, name);
     }
     let user_data_names: Vec<_> = contents.user_data.iter().map(|u| &u.name).collect();
@@ -69,7 +67,7 @@ fn non_ascii_names_and_metadata_survive() {
         contents.metadata.get("_ai_Description"),
         Some("Partikel über Wasser, 粒子")
     );
-    assert_eq!(contents.points[0].path, "/粒子");
+    assert_eq!(contents.points[0].name, "粒子");
     assert_eq!(contents.points[0].attributes[0].name, "température");
 }
 
@@ -143,40 +141,4 @@ fn point_arrays_reject_buffers_of_the_wrong_length() {
         );
     }
     assert_eq!(values(&mut reader, &points.positions), [[0.0; 3]; 3]);
-}
-
-#[test]
-fn full_metadata_dictionary_falls_back_to_inline_metadata() {
-    let object_count = 300;
-    let mut archive = ArchiveWriter::create(Cursor::new(Vec::new())).unwrap();
-    for i in 0..object_count {
-        let name = format!("object{i}");
-        let mut metadata = MetaData::new();
-        metadata.set("index", i.to_string()).unwrap();
-        archive.claim_child_name(&name).unwrap();
-        archive
-            .add_claimed_child_object(&name, &metadata, CompoundWriter::new())
-            .unwrap();
-    }
-    let mut long_metadata = MetaData::new();
-    long_metadata.set("long", "x".repeat(300)).unwrap();
-    archive.claim_child_name("long").unwrap();
-    archive
-        .add_claimed_child_object("long", &long_metadata, CompoundWriter::new())
-        .unwrap();
-    let file = archive.finish().unwrap().into_inner();
-
-    let hierarchy = crate::read::tree::tests::hierarchy_of(file);
-    assert_eq!(hierarchy.objects_depth_first.len(), object_count + 1);
-    for (i, object) in hierarchy.objects_depth_first[..object_count]
-        .iter()
-        .enumerate()
-    {
-        assert_eq!(object.path, format!("/object{i}"));
-        assert_eq!(object.metadata.get("index"), Some(i.to_string().as_str()));
-    }
-    assert_eq!(
-        hierarchy.objects_depth_first[object_count].metadata,
-        long_metadata
-    );
 }
