@@ -2,28 +2,14 @@ use std::io::{Seek, Write};
 
 use crate::archive::ArchiveWriter;
 use crate::compound::CompoundWriter;
-use crate::data_type::{DataType, Pod};
 use crate::error::{Error, Result};
-use crate::metadata::MetaData;
-
-pub(crate) const POINTS_SCHEMA: &str = "AbcGeom_Points_v1";
-const GEOM_BASE_SCHEMA: &str = "AbcGeom_GeomBase_v1";
-pub(crate) const GEOM_COMPOUND: &str = ".geom";
-pub(crate) const ARB_GEOM_PARAMS_COMPOUND: &str = ".arbGeomParams";
-
-pub(crate) const POSITIONS: &str = "P";
-pub(crate) const SELF_BOUNDS: &str = ".selfBnds";
-const POINT_IDS: &str = ".pointIds";
-pub(crate) const VELOCITIES: &str = ".velocities";
-pub(crate) const WIDTHS: &str = ".widths";
-
-const PER_POINT_SCOPE: &str = "var";
-
-pub(crate) const FLOAT1: DataType = DataType::new(Pod::Float32, 1);
-pub(crate) const FLOAT2: DataType = DataType::new(Pod::Float32, 2);
-pub(crate) const FLOAT3: DataType = DataType::new(Pod::Float32, 3);
-const POINT_ID: DataType = DataType::new(Pod::Uint64, 1);
-pub(crate) const BOX3D: DataType = DataType::new(Pod::Float64, 6);
+use crate::format::data_type::DataType;
+use crate::format::metadata::MetaData;
+use crate::format::schema::{
+    ARB_GEOM_PARAMS_COMPOUND, BOX3D, FLOAT1, FLOAT2, FLOAT3, GEOM_BASE_SCHEMA, GEOM_COMPOUND,
+    PER_POINT_SCOPE, POINT_ID, POINT_IDS, POINTS_SCHEMA, POSITIONS, SELF_BOUNDS, VELOCITIES,
+    WIDTHS,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Attribute<'a> {

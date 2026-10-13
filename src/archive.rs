@@ -5,13 +5,14 @@ use std::path::Path;
 use byteorder::{LittleEndian, WriteBytesExt};
 
 use crate::compound::CompoundWriter;
-use crate::data_type::{DataType, Pod};
 use crate::error::{Error, Result};
+use crate::format::metadata::MetaData;
+use crate::format::ogawa::{Child, DataRef, GroupRef};
+use crate::format::schema::USER_DATA_BYTE;
 use crate::hash::ObjectHierarchyHashes;
 use crate::headers::encode_object_header;
-use crate::metadata::MetaData;
 use crate::names::SiblingNames;
-use crate::ogawa::{Child, DataRef, GroupRef, OgawaWriter};
+use crate::ogawa::OgawaWriter;
 use crate::output::ArchiveOutput;
 
 const ALEMBIC_OGAWA_FILE_VERSION: i32 = 0;
@@ -22,7 +23,6 @@ const ALEMBIC_VERSION_VALUE: &str = concat!(
     env!("CARGO_PKG_VERSION"),
     ")"
 );
-pub(crate) const USER_DATA_BYTE: DataType = DataType::new(Pod::Uint8, 1);
 
 pub struct ArchiveWriter<W: Write + Seek> {
     output: ArchiveOutput<W>,

@@ -1,9 +1,9 @@
 use std::io::{Read, Seek};
 
-use crate::data_type::DataType;
 use crate::error::Result;
-use crate::hash::DIGEST_LEN;
-use crate::ogawa::{Child, GroupRef};
+use crate::format::data_type::DataType;
+use crate::format::layout::DIGEST_LEN;
+use crate::format::ogawa::{Child, GroupRef};
 use crate::read::headers::{PropertyKind, decode_object_names, decode_property_headers};
 use crate::read::ogawa::{DataSpan, OgawaReader};
 

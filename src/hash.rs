@@ -1,4 +1,4 @@
-pub(crate) const DIGEST_LEN: usize = 16;
+use crate::format::layout::{DIGEST_LEN, HIERARCHY_HASHES_LEN};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Digest([u8; DIGEST_LEN]);
@@ -21,8 +21,6 @@ pub(crate) struct ObjectHierarchyHashes {
 }
 
 impl ObjectHierarchyHashes {
-    pub(crate) const ENCODED_LEN: usize = 2 * DIGEST_LEN;
-
     pub(crate) fn placeholder() -> Self {
         ObjectHierarchyHashes {
             properties: Digest::PLACEHOLDER,
@@ -30,8 +28,8 @@ impl ObjectHierarchyHashes {
         }
     }
 
-    pub(crate) fn encode(&self) -> [u8; Self::ENCODED_LEN] {
-        let mut encoded = [0; Self::ENCODED_LEN];
+    pub(crate) fn encode(&self) -> [u8; HIERARCHY_HASHES_LEN] {
+        let mut encoded = [0; HIERARCHY_HASHES_LEN];
         encoded[..DIGEST_LEN].copy_from_slice(self.properties.as_bytes());
         encoded[DIGEST_LEN..].copy_from_slice(self.children.as_bytes());
         encoded

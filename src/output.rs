@@ -1,10 +1,11 @@
 use std::io::{Seek, Write};
 
 use crate::error::Result;
+use crate::format::layout::SAMPLES_PER_PROPERTY;
+use crate::format::ogawa::DataRef;
 use crate::hash::placeholder_sample_digest;
-use crate::headers::SAMPLES_PER_PROPERTY;
-use crate::metadata::MetaDataDictionary;
-use crate::ogawa::{DataRef, OgawaWriter};
+use crate::metadata_dictionary::MetaDataDictionary;
+use crate::ogawa::OgawaWriter;
 
 pub(crate) struct ArchiveOutput<W: Write + Seek> {
     pub(crate) ogawa: OgawaWriter<W>,

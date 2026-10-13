@@ -1,23 +1,13 @@
 use byteorder::{LittleEndian, WriteBytesExt};
 
-use crate::data_type::DataType;
 use crate::error::{Error, Result};
-use crate::metadata::{MetaDataDictionary, MetaDataIndex};
-
-pub(crate) const PROPERTY_TYPE_MASK: u32 = 0b11;
-pub(crate) const COMPOUND_PROPERTY: u32 = 0;
-pub(crate) const SCALAR_PROPERTY: u32 = 1;
-const ARRAY_PROPERTY: u32 = 2;
-const SCALAR_LIKE_ARRAY_PROPERTY: u32 = 3;
-
-pub(crate) const FIELD_WIDTH_SHIFT: u32 = 2;
-pub(crate) const POD_SHIFT: u32 = 4;
-const HOMOGENEOUS_FLAG: u32 = 1 << 10;
-const CONSTANT_FLAG: u32 = 1 << 11;
-pub(crate) const EXTENT_SHIFT: u32 = 12;
-pub(crate) const METADATA_INDEX_SHIFT: u32 = 20;
-
-pub(crate) const SAMPLES_PER_PROPERTY: u32 = 1;
+use crate::format::data_type::DataType;
+use crate::format::layout::{
+    ARRAY_PROPERTY, COMPOUND_PROPERTY, CONSTANT_FLAG, EXTENT_SHIFT, FIELD_WIDTH_SHIFT,
+    HOMOGENEOUS_FLAG, METADATA_INDEX_SHIFT, POD_SHIFT, SAMPLES_PER_PROPERTY,
+    SCALAR_LIKE_ARRAY_PROPERTY, SCALAR_PROPERTY,
+};
+use crate::metadata_dictionary::{MetaDataDictionary, MetaDataIndex};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum PropertyLayout {
@@ -143,7 +133,7 @@ fn length_as_u32(what: &'static str, len: usize) -> Result<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data_type::Pod;
+    use crate::format::data_type::Pod;
 
     const V3F: DataType = DataType::new(Pod::Float32, 3);
 

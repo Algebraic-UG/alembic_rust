@@ -1,10 +1,10 @@
 use std::io::{Read, Seek};
 use std::marker::PhantomData;
 
-use crate::archive::USER_DATA_BYTE;
 use crate::error::{Error, Result};
-use crate::metadata::MetaData;
-use crate::ogawa::Child;
+use crate::format::metadata::MetaData;
+use crate::format::ogawa::Child;
+use crate::format::schema::USER_DATA_BYTE;
 use crate::read::ogawa::{DataSpan, OgawaReader};
 use crate::read::points::{Points, points_among};
 use crate::read::tree::{FirstSample, PropertyValue, walk_hierarchy};

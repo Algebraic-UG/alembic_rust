@@ -1,7 +1,7 @@
 use std::io::{Read, Seek, SeekFrom};
 
 use crate::error::{Error, Result};
-use crate::ogawa::{
+use crate::format::ogawa::{
     CHILD_REFERENCE_SIZE, Child, DataRef, FROZEN, FROZEN_BYTE_OFFSET, GroupRef, HEADER_LEN, MAGIC,
     RECORD_LENGTH_FIELD, ROOT_POSITION_OFFSET,
 };

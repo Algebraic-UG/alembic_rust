@@ -1,10 +1,8 @@
-use crate::data_type::{DataType, Pod};
-use crate::hash::ObjectHierarchyHashes;
-use crate::headers::{
-    COMPOUND_PROPERTY, EXTENT_SHIFT, FIELD_WIDTH_SHIFT, METADATA_INDEX_SHIFT, POD_SHIFT,
-    PROPERTY_TYPE_MASK, SCALAR_PROPERTY,
+use crate::format::data_type::{DataType, Pod};
+use crate::format::layout::{
+    COMPOUND_PROPERTY, EXTENT_SHIFT, FIELD_WIDTH_SHIFT, HIERARCHY_HASHES_LEN,
+    INLINE_METADATA_INDEX, METADATA_INDEX_SHIFT, POD_SHIFT, PROPERTY_TYPE_MASK, SCALAR_PROPERTY,
 };
-use crate::metadata::INLINE_INDEX;
 
 const FIELD_WIDTH_MASK: u32 = 0b11;
 const FOUR_BYTE_FIELD_WIDTH: u32 = 2;
@@ -27,9 +25,7 @@ pub(crate) enum PropertyKind {
 }
 
 pub(crate) fn decode_object_names(bytes: &[u8]) -> Vec<String> {
-    let headers_len = bytes
-        .len()
-        .saturating_sub(ObjectHierarchyHashes::ENCODED_LEN);
+    let headers_len = bytes.len().saturating_sub(HIERARCHY_HASHES_LEN);
     let mut fields = Fields::new(&bytes[..headers_len]);
     std::iter::from_fn(|| decode_object_name(&mut fields)).collect()
 }
@@ -105,7 +101,7 @@ impl<'a> Fields<'a> {
     }
 
     fn skip_metadata(&mut self, metadata_index: u8, length_width: u32) -> Option<()> {
-        if metadata_index == INLINE_INDEX {
+        if metadata_index == INLINE_METADATA_INDEX {
             let len = self.sized(length_width)?;
             self.take(len as usize)?;
         }
@@ -116,8 +112,9 @@ impl<'a> Fields<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::hash::ObjectHierarchyHashes;
     use crate::headers::{PropertyLayout, encode_object_header, encode_property_header};
-    use crate::metadata::MetaDataDictionary;
+    use crate::metadata_dictionary::MetaDataDictionary;
 
     const FLOAT3: DataType = DataType::new(Pod::Float32, 3);
 

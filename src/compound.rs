@@ -1,11 +1,11 @@
 use std::io::{Seek, Write};
 
-use crate::data_type::DataType;
 use crate::error::Result;
+use crate::format::data_type::DataType;
+use crate::format::metadata::MetaData;
+use crate::format::ogawa::{Child, DataRef, GroupRef};
 use crate::headers::{PropertyLayout, encode_property_header};
-use crate::metadata::MetaData;
 use crate::names::SiblingNames;
-use crate::ogawa::{Child, DataRef, GroupRef};
 use crate::output::ArchiveOutput;
 
 #[derive(Debug, Default)]

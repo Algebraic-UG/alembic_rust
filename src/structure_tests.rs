@@ -1,8 +1,8 @@
 use crate::archive::ArchiveWriter;
 use crate::compound::CompoundWriter;
-use crate::data_type::{DataType, Pod};
 use crate::error::Error;
-use crate::metadata::MetaData;
+use crate::format::data_type::{DataType, Pod};
+use crate::format::metadata::MetaData;
 
 fn metadata(pairs: &[(&str, &str)]) -> MetaData {
     let mut md = MetaData::new();

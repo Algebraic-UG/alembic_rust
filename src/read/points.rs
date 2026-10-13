@@ -1,8 +1,8 @@
 use std::io::{Read, Seek};
 
-use crate::data_type::DataType;
 use crate::error::Result;
-use crate::points::{
+use crate::format::data_type::DataType;
+use crate::format::schema::{
     ARB_GEOM_PARAMS_COMPOUND, BOX3D, FLOAT1, FLOAT2, FLOAT3, GEOM_COMPOUND, POSITIONS, SELF_BOUNDS,
     VELOCITIES, WIDTHS,
 };
