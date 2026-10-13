@@ -6,6 +6,9 @@ mod format;
 mod read;
 mod write;
 
+#[cfg(test)]
+mod round_trip_tests;
+
 pub use error::{Error, Result};
 pub use format::metadata::MetaData;
 pub use read::{
