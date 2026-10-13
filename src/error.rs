@@ -17,6 +17,17 @@ pub enum Error {
     #[error("{what} is too long to be stored in a 32-bit length field")]
     TooLong { what: &'static str },
 
+    #[error("{what} {name:?} has {actual} values but the points object has {expected} points")]
+    PointCountMismatch {
+        what: &'static str,
+        name: String,
+        expected: usize,
+        actual: usize,
+    },
+
+    #[error("object {name:?} was dropped before it was finished")]
+    UnfinishedObject { name: String },
+
     #[error("archive exceeds the maximum Ogawa file size")]
     FileTooLarge,
 

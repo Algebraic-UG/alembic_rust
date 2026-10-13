@@ -82,11 +82,13 @@ fn writes_objects_with_nested_properties() {
     properties
         .add_compound(out, ".geom", &metadata(&[("schema", "Test_Geom_v1")]), geom)
         .unwrap();
+    archive.claim_child_name("pts").unwrap();
     archive
-        .add_child_object("pts", &metadata(&[("schema", "Test_v1")]), properties)
+        .add_claimed_child_object("pts", &metadata(&[("schema", "Test_v1")]), properties)
         .unwrap();
+    archive.claim_child_name("empty").unwrap();
     archive
-        .add_child_object("empty", &MetaData::new(), CompoundWriter::new())
+        .add_claimed_child_object("empty", &MetaData::new(), CompoundWriter::new())
         .unwrap();
     let bytes = archive.finish().unwrap().into_inner();
     assert_eq!(&bytes[..6], b"Ogawa\xff");
@@ -95,10 +97,8 @@ fn writes_objects_with_nested_properties() {
 #[test]
 fn sibling_names_must_be_unique_and_valid() {
     let mut archive = ArchiveWriter::create(std::io::Cursor::new(Vec::new())).unwrap();
-    archive
-        .add_child_object("a", &MetaData::new(), CompoundWriter::new())
-        .unwrap();
-    let duplicate = archive.add_child_object("a", &MetaData::new(), CompoundWriter::new());
+    archive.claim_child_name("a").unwrap();
+    let duplicate = archive.claim_child_name("a");
     assert!(matches!(duplicate, Err(Error::DuplicateName { .. })));
 
     let out = archive.output();

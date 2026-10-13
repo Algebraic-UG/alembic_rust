@@ -5,7 +5,7 @@ use std::path::Path;
 use byteorder::{LittleEndian, WriteBytesExt};
 
 use crate::compound::CompoundWriter;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::hash::ObjectHierarchyHashes;
 use crate::headers::encode_object_header;
 use crate::metadata::MetaData;
@@ -28,6 +28,7 @@ pub struct ArchiveWriter<W: Write + Seek> {
     library_version: DataRef,
     metadata: MetaData,
     top_object_children: ChildObjects,
+    abandoned_object: Option<String>,
 }
 
 #[derive(Default)]
@@ -54,6 +55,7 @@ impl<W: Write + Seek> ArchiveWriter<W> {
             library_version,
             metadata: MetaData::new(),
             top_object_children: ChildObjects::default(),
+            abandoned_object: None,
         })
     }
 
@@ -62,6 +64,9 @@ impl<W: Write + Seek> ArchiveWriter<W> {
     }
 
     pub fn finish(mut self) -> Result<W> {
+        if let Some(name) = self.abandoned_object.take() {
+            return Err(Error::UnfinishedObject { name });
+        }
         self.metadata
             .set(ALEMBIC_VERSION_KEY, ALEMBIC_VERSION_VALUE)?;
         let top_object = self.write_top_object()?;
@@ -86,14 +91,21 @@ impl<W: Write + Seek> ArchiveWriter<W> {
         &mut self.output
     }
 
-    pub(crate) fn add_child_object(
+    pub(crate) fn claim_child_name(&mut self, name: &str) -> Result<()> {
+        self.top_object_children.names.claim(name)
+    }
+
+    pub(crate) fn abandon_child_object(&mut self, name: &str) {
+        self.abandoned_object.get_or_insert_with(|| name.to_owned());
+    }
+
+    pub(crate) fn add_claimed_child_object(
         &mut self,
         name: &str,
         metadata: &MetaData,
         properties: CompoundWriter,
     ) -> Result<()> {
         let children = &mut self.top_object_children;
-        children.names.claim(name)?;
         let properties = properties.finish(&mut self.output)?;
         let headers_of_no_children = ObjectHierarchyHashes::placeholder().encode();
         let child_headers = self.output.ogawa.write_data(&[&headers_of_no_children])?;
