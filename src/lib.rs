@@ -11,6 +11,7 @@ mod metadata;
 mod names;
 mod ogawa;
 mod output;
+mod points;
 
 #[cfg(test)]
 mod structure_tests;
@@ -18,3 +19,4 @@ mod structure_tests;
 pub use archive::ArchiveWriter;
 pub use error::{Error, Result};
 pub use metadata::MetaData;
+pub use points::{Attribute, PointsWriter};
