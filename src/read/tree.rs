@@ -43,7 +43,6 @@ pub(crate) struct FirstSample {
 
 pub(crate) struct Hierarchy {
     pub(crate) top_properties: Vec<PropertyNode>,
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) objects_depth_first: Vec<ObjectNode>,
 }
 
@@ -96,12 +95,14 @@ impl<R: Read + Seek> Walker<'_, R> {
                 continue;
             };
             let child_path = format!("{path}/{}", header.name);
-            let child_properties = self.walk_object(child_group, &child_path, depth + 1)?;
+            let child_slot = self.objects_depth_first.len();
             self.objects_depth_first.push(ObjectNode {
-                path: child_path,
+                path: child_path.clone(),
                 metadata: header.metadata,
-                properties: child_properties,
+                properties: Vec::new(),
             });
+            let child_properties = self.walk_object(child_group, &child_path, depth + 1)?;
+            self.objects_depth_first[child_slot].properties = child_properties;
         }
         Ok(properties)
     }

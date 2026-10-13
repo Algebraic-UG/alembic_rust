@@ -21,4 +21,7 @@ pub use archive::ArchiveWriter;
 pub use error::{Error, Result};
 pub use metadata::MetaData;
 pub use points::{Attribute, PointsWriter};
-pub use read::{ArchiveContents, ArchiveReader, ArrayHandle, UserData, read_archive};
+pub use read::{
+    ArchiveContents, ArchiveReader, ArrayHandle, AttributeValues, PointAttribute, Points, UserData,
+    read_archive,
+};

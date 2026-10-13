@@ -7,6 +7,7 @@ use crate::metadata::MetaData;
 use crate::ogawa::{Child, DataRef};
 use crate::read::headers::IndexedMetaData;
 use crate::read::ogawa::{DataSpan, OgawaReader};
+use crate::read::points::{Points, points_among};
 use crate::read::tree::{FirstSample, PropertyValue, walk_hierarchy};
 
 const OLDEST_READABLE_LIBRARY_VERSION: i32 = 9999;
@@ -14,6 +15,7 @@ const OLDEST_READABLE_LIBRARY_VERSION: i32 = 9999;
 #[derive(Debug, Clone)]
 pub struct ArchiveContents {
     pub metadata: MetaData,
+    pub points: Vec<Points>,
     pub user_data: Vec<UserData>,
 }
 
@@ -120,10 +122,12 @@ pub fn read_archive<R: Read + Seek>(source: R) -> Result<(ArchiveContents, Archi
             _ => None,
         })
         .collect();
+    let points = points_among(hierarchy.objects_depth_first, &mut ogawa)?;
 
     Ok((
         ArchiveContents {
             metadata,
+            points,
             user_data,
         },
         ArchiveReader { ogawa },

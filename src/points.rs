@@ -6,24 +6,24 @@ use crate::data_type::{DataType, Pod};
 use crate::error::{Error, Result};
 use crate::metadata::MetaData;
 
-const POINTS_SCHEMA: &str = "AbcGeom_Points_v1";
+pub(crate) const POINTS_SCHEMA: &str = "AbcGeom_Points_v1";
 const GEOM_BASE_SCHEMA: &str = "AbcGeom_GeomBase_v1";
-const GEOM_COMPOUND: &str = ".geom";
-const ARB_GEOM_PARAMS_COMPOUND: &str = ".arbGeomParams";
+pub(crate) const GEOM_COMPOUND: &str = ".geom";
+pub(crate) const ARB_GEOM_PARAMS_COMPOUND: &str = ".arbGeomParams";
 
-const POSITIONS: &str = "P";
-const SELF_BOUNDS: &str = ".selfBnds";
+pub(crate) const POSITIONS: &str = "P";
+pub(crate) const SELF_BOUNDS: &str = ".selfBnds";
 const POINT_IDS: &str = ".pointIds";
-const VELOCITIES: &str = ".velocities";
-const WIDTHS: &str = ".widths";
+pub(crate) const VELOCITIES: &str = ".velocities";
+pub(crate) const WIDTHS: &str = ".widths";
 
 const PER_POINT_SCOPE: &str = "var";
 
-const FLOAT1: DataType = DataType::new(Pod::Float32, 1);
-const FLOAT2: DataType = DataType::new(Pod::Float32, 2);
-const FLOAT3: DataType = DataType::new(Pod::Float32, 3);
+pub(crate) const FLOAT1: DataType = DataType::new(Pod::Float32, 1);
+pub(crate) const FLOAT2: DataType = DataType::new(Pod::Float32, 2);
+pub(crate) const FLOAT3: DataType = DataType::new(Pod::Float32, 3);
 const POINT_ID: DataType = DataType::new(Pod::Uint64, 1);
-const BOX3D: DataType = DataType::new(Pod::Float64, 6);
+pub(crate) const BOX3D: DataType = DataType::new(Pod::Float64, 6);
 
 #[derive(Debug, Clone, Copy)]
 pub enum Attribute<'a> {
