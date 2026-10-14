@@ -1,6 +1,10 @@
 metadata:
   _ai_AlembicVersion=Alembic 1.8.12 (written by alembic_rust 0.1.0)
   _ai_Application=alembic_rust points example
+points debris: 2 points
+  bounds: [5.0, 5.0, 5.0, 6.0, 6.0, 6.0]
+  positions: [[5.0, 5.0, 5.0], [6.0, 6.0, 6.0]]
+  attribute mass: [1.0, 2.0]
 points particles: 4 points
   bounds: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
   positions: [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
@@ -11,10 +15,6 @@ points particles: 4 points
   attribute rest: [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
   attribute uv: [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]]
   attribute temperature: [20.0, 21.0, 22.0, 23.0]
-points debris: 2 points
-  bounds: [5.0, 5.0, 5.0, 6.0, 6.0, 6.0]
-  positions: [[5.0, 5.0, 5.0], [6.0, 6.0, 6.0]]
-  attribute mass: [1.0, 2.0]
 points positions_only: 4 points
   bounds: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0]
   positions: [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]

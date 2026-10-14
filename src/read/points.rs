@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::io::{Read, Seek};
 
 use crate::error::Result;
@@ -13,8 +14,6 @@ use crate::read::tree::{ObjectNode, PropertyNode, PropertyValue};
 /// A points object read from an archive.
 #[derive(Debug, Clone)]
 pub struct Points {
-    /// The object's name.
-    pub name: String,
     /// The bounding box `.selfBnds` as `[min_x, min_y, min_z, max_x, max_y, max_z]`.
     ///
     /// For an object without points, the minimum is [`f64::MAX`] and the maximum [`f64::MIN`].
@@ -52,8 +51,8 @@ pub enum AttributeValues {
 pub(crate) fn points_among<R: Read + Seek>(
     objects: Vec<ObjectNode>,
     ogawa: &mut OgawaReader<R>,
-) -> Result<Vec<Points>> {
-    let mut points = Vec::with_capacity(objects.len());
+) -> Result<BTreeMap<String, Points>> {
+    let mut points = BTreeMap::new();
     for object in objects {
         let Some(PropertyValue::Compound(geom)) = find(&object.properties, GEOM_COMPOUND) else {
             continue;
@@ -61,14 +60,14 @@ pub(crate) fn points_among<R: Read + Seek>(
         let Some(positions) = array_of(geom, POSITIONS, FLOAT3) else {
             continue;
         };
-        points.push(Points {
-            name: object.name,
+        let object_points = Points {
             bounds: bounds_of(geom, ogawa)?,
             positions,
             velocities: array_of(geom, VELOCITIES, FLOAT3),
             widths: array_of(geom, WIDTHS, FLOAT1),
             attributes: attributes_of(geom),
-        });
+        };
+        points.insert(object.name, object_points);
     }
     Ok(points)
 }
@@ -138,11 +137,14 @@ mod tests {
     use crate::read::{ArchiveReader, ArrayHandle, AttributeValues, Points, read_archive};
     use crate::write::ArchiveWriter;
     use crate::write::Attribute;
+    use std::collections::BTreeMap;
     use std::io::Cursor;
 
     type Reader = ArchiveReader<Cursor<Vec<u8>>>;
 
-    fn read_back(build: impl FnOnce(&mut ArchiveWriter<Cursor<Vec<u8>>>)) -> (Vec<Points>, Reader) {
+    fn read_back(
+        build: impl FnOnce(&mut ArchiveWriter<Cursor<Vec<u8>>>),
+    ) -> (BTreeMap<String, Points>, Reader) {
         let mut archive = ArchiveWriter::create(Cursor::new(Vec::new())).unwrap();
         build(&mut archive);
         let file = archive.finish().unwrap().into_inner();
@@ -175,10 +177,9 @@ mod tests {
             p.finish().unwrap();
         });
 
-        let [particles] = &points[..] else {
-            panic!("expected one points object, got {points:?}");
-        };
-        assert_eq!(particles.name, "particles");
+        let names: Vec<_> = points.keys().map(String::as_str).collect();
+        assert_eq!(names, ["particles"]);
+        let particles = &points["particles"];
         assert_eq!(particles.bounds, Some([-1.0, -2.0, 0.5, 1.0, 5.0, 3.0]));
         assert_eq!(values(&mut reader, &particles.positions), positions);
         assert_eq!(
@@ -224,9 +225,10 @@ mod tests {
                 .finish()
                 .unwrap();
         });
-        let [positions_only, empty] = &points[..] else {
-            panic!("expected two points objects, got {points:?}");
-        };
+        let names: Vec<_> = points.keys().map(String::as_str).collect();
+        assert_eq!(names, ["empty", "positions_only"]);
+        let positions_only = &points["positions_only"];
+        let empty = &points["empty"];
         assert!(positions_only.velocities.is_none());
         assert!(positions_only.widths.is_none());
         assert!(positions_only.attributes.is_empty());

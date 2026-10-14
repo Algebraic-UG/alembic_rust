@@ -60,7 +60,7 @@ fn main() -> alembic_rust::Result<()> {
     let (contents, mut reader) = read_archive(File::open("particles.abc")?)?;
     println!("written by {:?}", contents.metadata.get("_ai_Application"));
 
-    for points in &contents.points {
+    for points in contents.points.values() {
         let mut positions = vec![[0.0f32; 3]; points.positions.len()];
         reader.read_into(&points.positions, &mut positions)?;
 

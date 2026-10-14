@@ -15,8 +15,8 @@ use crate::read::tree::{FirstSample, PropertyValue, walk_hierarchy};
 pub struct ArchiveContents {
     /// The archive metadata.
     pub metadata: MetaData,
-    /// The points objects, in file order.
-    pub points: Vec<Points>,
+    /// The points objects, by name.
+    pub points: BTreeMap<String, Points>,
     /// The user data blobs, by name.
     pub user_data: BTreeMap<String, ArrayHandle<u8>>,
 }

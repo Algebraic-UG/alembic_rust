@@ -56,7 +56,7 @@
 //! let (contents, mut reader) = read_archive(Cursor::new(file))?;
 //! assert_eq!(contents.metadata.get("_ai_Application"), Some("my app"));
 //!
-//! for points in &contents.points {
+//! for points in contents.points.values() {
 //!     let mut positions = vec![[0.0f32; 3]; points.positions.len()];
 //!     reader.read_into(&points.positions, &mut positions)?;
 //!

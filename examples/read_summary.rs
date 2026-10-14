@@ -26,8 +26,8 @@ fn main() -> alembic_rust::Result<()> {
         reader.user_data_reader(handle)?.read_to_end(&mut bytes)?;
         println!("user data {name}: {bytes:?}");
     }
-    for points in &contents.points {
-        println!("points {}: {} points", points.name, points.positions.len());
+    for (name, points) in &contents.points {
+        println!("points {name}: {} points", points.positions.len());
         if let Some(bounds) = points.bounds {
             println!("  bounds: {bounds:?}");
         }
