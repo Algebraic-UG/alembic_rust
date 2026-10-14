@@ -12,4 +12,4 @@ mod points;
 mod structure_tests;
 
 pub use archive::{ArchiveWriter, UserDataWriter};
-pub use points::{Attribute, PointsWriter};
+pub use points::PointsWriter;

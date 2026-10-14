@@ -135,7 +135,6 @@ mod tests {
     use crate::format::attribute::AttributeType;
     use crate::read::{ArchiveReader, ArrayHandle, Points, read_archive};
     use crate::write::ArchiveWriter;
-    use crate::write::Attribute;
     use std::collections::BTreeMap;
     use std::io::Cursor;
 
@@ -169,10 +168,9 @@ mod tests {
             let mut p = archive.begin_points("particles", &positions).unwrap();
             p.velocities(&velocities).unwrap();
             p.widths(&widths).unwrap();
-            p.attribute("Cd", Attribute::Float3(&colors)).unwrap();
-            p.attribute("uv", Attribute::Float2(&uvs)).unwrap();
-            p.attribute("temperature", Attribute::Float1(&temperatures))
-                .unwrap();
+            p.attribute("Cd", &colors).unwrap();
+            p.attribute("uv", &uvs).unwrap();
+            p.attribute("temperature", &temperatures).unwrap();
             p.finish().unwrap();
         });
 
@@ -204,11 +202,9 @@ mod tests {
     fn attributes_are_typed_only_as_the_type_they_hold() {
         let (points, _) = read_back(|archive| {
             let mut p = archive.begin_points("p", &[[0.0; 3]]).unwrap();
-            p.attribute("one", Attribute::Float1(&[1.0])).unwrap();
-            p.attribute("two", Attribute::Float2(&[[1.0, 2.0]]))
-                .unwrap();
-            p.attribute("three", Attribute::Float3(&[[1.0, 2.0, 3.0]]))
-                .unwrap();
+            p.attribute("one", &[1.0]).unwrap();
+            p.attribute("two", &[[1.0, 2.0]]).unwrap();
+            p.attribute("three", &[[1.0, 2.0, 3.0]]).unwrap();
             p.finish().unwrap();
         });
         let attributes = &points["p"].attributes;

@@ -1,56 +1,16 @@
 use std::io::{Seek, Write};
 
 use crate::error::{Error, Result};
+use crate::format::attribute::AttributeElement;
 use crate::format::data_type::DataType;
 use crate::format::metadata::MetaData;
 use crate::format::schema::{
-    ARB_GEOM_PARAMS_COMPOUND, BOX3D, FLOAT1, FLOAT2, FLOAT3, GEOM_BASE_SCHEMA, GEOM_COMPOUND,
+    ARB_GEOM_PARAMS_COMPOUND, BOX3D, FLOAT1, FLOAT3, GEOM_BASE_SCHEMA, GEOM_COMPOUND,
     PER_POINT_SCOPE, POINT_ID, POINT_IDS, POINTS_SCHEMA, POSITIONS, SELF_BOUNDS, VELOCITIES,
     WIDTHS,
 };
 use crate::write::archive::ArchiveWriter;
 use crate::write::compound::CompoundWriter;
-
-/// The values of a per-point attribute, one element per point.
-///
-/// Attributes are written without `interpretation` metadata, so readers see them as plain float
-/// arrays. Blender, for example, imports a 3-float `Cd` as a vector rather than a colour, and
-/// converts it from Y-up to Z-up.
-#[derive(Debug, Clone, Copy)]
-pub enum Attribute<'a> {
-    /// One float per point.
-    Float1(&'a [f32]),
-    /// Two floats per point.
-    Float2(&'a [[f32; 2]]),
-    /// Three floats per point.
-    Float3(&'a [[f32; 3]]),
-}
-
-impl Attribute<'_> {
-    fn num_points(&self) -> usize {
-        match self {
-            Attribute::Float1(values) => values.len(),
-            Attribute::Float2(values) => values.len(),
-            Attribute::Float3(values) => values.len(),
-        }
-    }
-
-    fn data_type(&self) -> DataType {
-        match self {
-            Attribute::Float1(_) => FLOAT1,
-            Attribute::Float2(..) => FLOAT2,
-            Attribute::Float3(..) => FLOAT3,
-        }
-    }
-
-    fn bytes(&self) -> &[u8] {
-        match self {
-            Attribute::Float1(values) => bytemuck::cast_slice(values),
-            Attribute::Float2(values) => bytemuck::cast_slice(values),
-            Attribute::Float3(values) => bytemuck::cast_slice(values),
-        }
-    }
-}
 
 /// Adds the optional properties of one points object, created by
 /// [`ArchiveWriter::begin_points`].
@@ -154,21 +114,27 @@ impl<W: Write + Seek> PointsWriter<'_, W> {
         )
     }
 
-    /// Writes a per-point attribute called `name` into `.arbGeomParams`.
+    /// Writes a per-point attribute called `name` into `.arbGeomParams`, one element of `values`
+    /// per point. The element type decides the attribute's type, see [`AttributeElement`].
+    ///
+    /// Attributes are written without `interpretation` metadata, so readers see them as plain
+    /// float arrays. Blender, for example, imports a 3-float `Cd` as a vector rather than a
+    /// colour, and converts it from Y-up to Z-up.
     ///
     /// # Errors
     ///
     /// [`Error::PointCountMismatch`] if there is not one value per point; nothing is written and
     /// the points writer stays usable. [`Error::InvalidName`] or [`Error::DuplicateName`] if
     /// `name` is empty, contains `/` or is already used by another attribute.
-    pub fn attribute(&mut self, name: &str, attribute: Attribute<'_>) -> Result<()> {
-        self.check_point_count("attribute", name, attribute.num_points())?;
+    pub fn attribute<T: AttributeElement>(&mut self, name: &str, values: &[T]) -> Result<()> {
+        self.check_point_count("attribute", name, values.len())?;
+        let data_type = T::TYPE.data_type();
         self.arb_geom_params.add_array(
             self.archive.output(),
             name,
-            &per_point_geom_param_metadata(attribute.data_type()),
-            attribute.data_type(),
-            attribute.bytes(),
+            &per_point_geom_param_metadata(data_type),
+            data_type,
+            bytemuck::cast_slice(values),
         )
     }
 
@@ -299,7 +265,7 @@ mod tests {
     fn rejects_attributes_with_wrong_point_count() {
         let mut archive = new_archive();
         let mut points = archive.begin_points("p", &[[0.0; 3]; 2]).unwrap();
-        let mismatch = points.attribute("t", Attribute::Float1(&[1.0]));
+        let mismatch = points.attribute("t", &[1.0]);
         assert!(matches!(
             mismatch,
             Err(Error::PointCountMismatch {
@@ -310,9 +276,7 @@ mod tests {
         ));
         assert!(points.velocities(&[[0.0; 3]; 3]).is_err());
         assert!(points.widths(&[]).is_err());
-        points
-            .attribute("t", Attribute::Float1(&[1.0, 2.0]))
-            .unwrap();
+        points.attribute("t", &[1.0, 2.0]).unwrap();
         points.finish().unwrap();
         archive.finish().unwrap();
     }
@@ -331,8 +295,8 @@ mod tests {
             points.widths(&[]),
             Err(Error::DuplicateName { .. })
         ));
-        points.attribute("a", Attribute::Float1(&[])).unwrap();
-        assert!(points.attribute("a", Attribute::Float1(&[])).is_err());
+        points.attribute("a", &[] as &[f32]).unwrap();
+        assert!(points.attribute("a", &[] as &[f32]).is_err());
         points.finish().unwrap();
     }
 

@@ -19,7 +19,7 @@ The reader is meant for the archives this library writes. It skips anything it d
 ## Usage
 
 ```rust
-use alembic_rust::{ArchiveWriter, Attribute};
+use alembic_rust::ArchiveWriter;
 
 fn main() -> alembic_rust::Result<()> {
     let positions = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
@@ -30,9 +30,9 @@ fn main() -> alembic_rust::Result<()> {
     let mut particles = archive.begin_points("particles", &positions)?;
     particles.velocities(&[[0.0, 1.0, 0.0]; 3])?;
     particles.widths(&[0.1, 0.2, 0.3])?;
-    particles.attribute("Cd", Attribute::Float3(&[[1.0, 0.0, 0.0]; 3]))?;
-    particles.attribute("uv", Attribute::Float2(&[[0.0, 0.0]; 3]))?;
-    particles.attribute("temperature", Attribute::Float1(&[20.0, 21.0, 22.0]))?;
+    particles.attribute("Cd", &[[1.0, 0.0, 0.0]; 3])?;
+    particles.attribute("uv", &[[0.0, 0.0]; 3])?;
+    particles.attribute("temperature", &[20.0, 21.0, 22.0])?;
     particles.finish()?;
 
     archive.finish()?;
