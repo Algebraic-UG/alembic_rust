@@ -57,7 +57,7 @@ impl Attribute<'_> {
 ///
 /// The object becomes part of the archive only when [`finish`](PointsWriter::finish) is called.
 /// Dropping it unfinished makes [`ArchiveWriter::finish`] fail with
-/// [`Error::UnfinishedObject`].
+/// [`Error::Unfinished`].
 #[must_use = "a points object is only added to the archive by calling finish()"]
 pub struct PointsWriter<'a, W: Write + Seek> {
     archive: &'a mut ArchiveWriter<W>,
@@ -342,7 +342,7 @@ mod tests {
         drop(archive.begin_points("lost", &[[0.0; 3]]).unwrap());
         assert!(matches!(
             archive.finish(),
-            Err(Error::UnfinishedObject { name }) if name == "lost"
+            Err(Error::Unfinished { name }) if name == "lost"
         ));
     }
 

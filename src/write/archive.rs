@@ -152,11 +152,11 @@ impl<W: Write + Seek> ArchiveWriter<W> {
     ///
     /// # Errors
     ///
-    /// [`Error::UnfinishedObject`] if a [`PointsWriter`](crate::PointsWriter) was dropped without being finished.
+    /// [`Error::Unfinished`] if a [`PointsWriter`](crate::PointsWriter) was dropped without being finished.
     /// The archive is then left incomplete.
     pub fn finish(mut self) -> Result<W> {
         if let Some(name) = self.abandoned_object.take() {
-            return Err(Error::UnfinishedObject { name });
+            return Err(Error::Unfinished { name });
         }
         self.metadata
             .set(ALEMBIC_VERSION_KEY, ALEMBIC_VERSION_VALUE)?;
