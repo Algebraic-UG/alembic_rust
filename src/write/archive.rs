@@ -128,6 +128,7 @@ impl<W: Write + Seek> ArchiveWriter<W> {
         name: &str,
         write: impl FnOnce(&mut UserDataWriter<'_, W>) -> io::Result<()>,
     ) -> Result<()> {
+        self.output.ogawa.ensure_usable()?;
         self.top_object_properties.claim_name(name)?;
         let mut writer = UserDataWriter {
             output: &mut self.output,
@@ -249,21 +250,12 @@ pub struct UserDataWriter<'a, W: Write + Seek> {
 
 impl<W: Write + Seek> Write for UserDataWriter<'_, W> {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        self.output
-            .append_to_sample(&mut self.sample, bytes)
-            .map_err(io_error_from)?;
+        self.output.append_to_sample(&mut self.sample, bytes)?;
         Ok(bytes.len())
     }
 
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
-    }
-}
-
-fn io_error_from(error: Error) -> io::Error {
-    match error {
-        Error::Io(io_error) => io_error,
-        other => io::Error::other(other),
     }
 }
 
