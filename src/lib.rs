@@ -56,25 +56,23 @@
 //! let (contents, mut reader) = read_archive(Cursor::new(file))?;
 //! assert_eq!(contents.metadata.get("_ai_Application"), Some("my app"));
 //!
-//! for points in &contents.points {
+//! for points in contents.points.values() {
 //!     let mut positions = vec![[0.0f32; 3]; points.positions.len()];
 //!     reader.read_into(&points.positions, &mut positions)?;
 //!
-//!     for attribute in &points.attributes {
-//!         if let AttributeValues::Float1(values) = &attribute.values {
+//!     for attribute in points.attributes.values() {
+//!         if let AttributeValues::Float1(values) = attribute {
 //!             let mut buffer = vec![0.0f32; values.len()];
 //!             reader.read_into(values, &mut buffer)?;
 //!         }
 //!     }
 //! }
-//! let [settings, log] = &contents.user_data[..] else {
-//!     panic!("expected two blobs");
-//! };
-//! let mut bytes = vec![0u8; settings.bytes.len()];
-//! reader.read_into(&settings.bytes, &mut bytes)?;
+//! let settings = &contents.user_data["settings"];
+//! let mut bytes = vec![0u8; settings.len()];
+//! reader.read_into(settings, &mut bytes)?;
 //!
 //! let mut text = String::new();
-//! reader.user_data_reader(&log.bytes)?.read_to_string(&mut text)?;
+//! reader.user_data_reader(&contents.user_data["log"])?.read_to_string(&mut text)?;
 //! assert_eq!(text, "simulated 100 frames");
 //! # Ok(())
 //! # }
@@ -94,7 +92,6 @@ mod round_trip_tests;
 pub use error::{Error, Result};
 pub use format::metadata::MetaData;
 pub use read::{
-    ArchiveContents, ArchiveReader, ArrayHandle, AttributeValues, PointAttribute, Points, UserData,
-    read_archive,
+    ArchiveContents, ArchiveReader, ArrayHandle, AttributeValues, Points, read_archive,
 };
 pub use write::{ArchiveWriter, Attribute, PointsWriter, UserDataWriter};

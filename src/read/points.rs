@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::io::{Read, Seek};
 
 use crate::error::Result;
@@ -8,13 +9,11 @@ use crate::format::schema::{
 };
 use crate::read::archive::ArrayHandle;
 use crate::read::ogawa::OgawaReader;
-use crate::read::tree::{ObjectNode, PropertyNode, PropertyValue};
+use crate::read::tree::{Properties, PropertyValue};
 
 /// A points object read from an archive.
 #[derive(Debug, Clone)]
 pub struct Points {
-    /// The object's name.
-    pub name: String,
     /// The bounding box `.selfBnds` as `[min_x, min_y, min_z, max_x, max_y, max_z]`.
     ///
     /// For an object without points, the minimum is [`f64::MAX`] and the maximum [`f64::MIN`].
@@ -25,20 +24,11 @@ pub struct Points {
     pub velocities: Option<ArrayHandle<[f32; 3]>>,
     /// The `.widths`, if written.
     pub widths: Option<ArrayHandle<f32>>,
-    /// The attributes in `.arbGeomParams`, in file order.
-    pub attributes: Vec<PointAttribute>,
+    /// The attributes in `.arbGeomParams`, by name.
+    pub attributes: BTreeMap<String, AttributeValues>,
 }
 
-/// A per-point attribute of a [`Points`] object.
-#[derive(Debug, Clone)]
-pub struct PointAttribute {
-    /// The attribute's name.
-    pub name: String,
-    /// Where the attribute's values are stored.
-    pub values: AttributeValues,
-}
-
-/// The values of a [`PointAttribute`], by number of components.
+/// Where the values of a per-point attribute are stored, by number of components.
 #[derive(Debug, Clone, Copy)]
 pub enum AttributeValues {
     /// One float per point.
@@ -50,42 +40,31 @@ pub enum AttributeValues {
 }
 
 pub(crate) fn points_among<R: Read + Seek>(
-    objects: Vec<ObjectNode>,
+    objects: BTreeMap<String, Properties>,
     ogawa: &mut OgawaReader<R>,
-) -> Result<Vec<Points>> {
-    let mut points = Vec::with_capacity(objects.len());
-    for object in objects {
-        let Some(PropertyValue::Compound(geom)) = find(&object.properties, GEOM_COMPOUND) else {
+) -> Result<BTreeMap<String, Points>> {
+    let mut points = BTreeMap::new();
+    for (name, properties) in objects {
+        let Some(PropertyValue::Compound(geom)) = properties.get(GEOM_COMPOUND) else {
             continue;
         };
         let Some(positions) = array_of(geom, POSITIONS, FLOAT3) else {
             continue;
         };
-        points.push(Points {
-            name: object.name,
+        let object_points = Points {
             bounds: bounds_of(geom, ogawa)?,
             positions,
             velocities: array_of(geom, VELOCITIES, FLOAT3),
             widths: array_of(geom, WIDTHS, FLOAT1),
             attributes: attributes_of(geom),
-        });
+        };
+        points.insert(name, object_points);
     }
     Ok(points)
 }
 
-fn find<'a>(properties: &'a [PropertyNode], name: &str) -> Option<&'a PropertyValue> {
-    properties
-        .iter()
-        .find(|property| property.name == name)
-        .map(|property| &property.value)
-}
-
-fn array_of<T>(
-    properties: &[PropertyNode],
-    name: &str,
-    data_type: DataType,
-) -> Option<ArrayHandle<T>> {
-    match find(properties, name)? {
+fn array_of<T>(properties: &Properties, name: &str, data_type: DataType) -> Option<ArrayHandle<T>> {
+    match properties.get(name)? {
         PropertyValue::Array(sample) if sample.data_type == data_type => {
             Some(ArrayHandle::of_first_sample(*sample))
         }
@@ -94,10 +73,10 @@ fn array_of<T>(
 }
 
 fn bounds_of<R: Read + Seek>(
-    geom: &[PropertyNode],
+    geom: &Properties,
     ogawa: &mut OgawaReader<R>,
 ) -> Result<Option<[f64; 6]>> {
-    let Some(PropertyValue::Scalar(sample)) = find(geom, SELF_BOUNDS) else {
+    let Some(PropertyValue::Scalar(sample)) = geom.get(SELF_BOUNDS) else {
         return Ok(None);
     };
     if sample.data_type != BOX3D || sample.len == 0 {
@@ -108,15 +87,14 @@ fn bounds_of<R: Read + Seek>(
     Ok(Some(bounds))
 }
 
-fn attributes_of(geom: &[PropertyNode]) -> Vec<PointAttribute> {
-    let Some(PropertyValue::Compound(arb_geom_params)) = find(geom, ARB_GEOM_PARAMS_COMPOUND)
-    else {
-        return Vec::new();
+fn attributes_of(geom: &Properties) -> BTreeMap<String, AttributeValues> {
+    let Some(PropertyValue::Compound(arb_geom_params)) = geom.get(ARB_GEOM_PARAMS_COMPOUND) else {
+        return BTreeMap::new();
     };
     arb_geom_params
         .iter()
-        .filter_map(|property| {
-            let PropertyValue::Array(sample) = property.value else {
+        .filter_map(|(name, value)| {
+            let PropertyValue::Array(sample) = *value else {
                 return None;
             };
             let values = match sample.data_type {
@@ -125,10 +103,7 @@ fn attributes_of(geom: &[PropertyNode]) -> Vec<PointAttribute> {
                 FLOAT3 => AttributeValues::Float3(ArrayHandle::of_first_sample(sample)),
                 _ => return None,
             };
-            Some(PointAttribute {
-                name: property.name.clone(),
-                values,
-            })
+            Some((name.clone(), values))
         })
         .collect()
 }
@@ -138,11 +113,14 @@ mod tests {
     use crate::read::{ArchiveReader, ArrayHandle, AttributeValues, Points, read_archive};
     use crate::write::ArchiveWriter;
     use crate::write::Attribute;
+    use std::collections::BTreeMap;
     use std::io::Cursor;
 
     type Reader = ArchiveReader<Cursor<Vec<u8>>>;
 
-    fn read_back(build: impl FnOnce(&mut ArchiveWriter<Cursor<Vec<u8>>>)) -> (Vec<Points>, Reader) {
+    fn read_back(
+        build: impl FnOnce(&mut ArchiveWriter<Cursor<Vec<u8>>>),
+    ) -> (BTreeMap<String, Points>, Reader) {
         let mut archive = ArchiveWriter::create(Cursor::new(Vec::new())).unwrap();
         build(&mut archive);
         let file = archive.finish().unwrap().into_inner();
@@ -175,10 +153,9 @@ mod tests {
             p.finish().unwrap();
         });
 
-        let [particles] = &points[..] else {
-            panic!("expected one points object, got {points:?}");
-        };
-        assert_eq!(particles.name, "particles");
+        let names: Vec<_> = points.keys().map(String::as_str).collect();
+        assert_eq!(names, ["particles"]);
+        let particles = &points["particles"];
         assert_eq!(particles.bounds, Some([-1.0, -2.0, 0.5, 1.0, 5.0, 3.0]));
         assert_eq!(values(&mut reader, &particles.positions), positions);
         assert_eq!(
@@ -190,21 +167,17 @@ mod tests {
             widths
         );
 
-        let names: Vec<_> = particles
-            .attributes
-            .iter()
-            .map(|a| a.name.as_str())
-            .collect();
-        assert_eq!(names, ["Cd", "uv", "temperature"]);
-        let AttributeValues::Float3(cd) = particles.attributes[0].values else {
+        let names: Vec<_> = particles.attributes.keys().map(String::as_str).collect();
+        assert_eq!(names, ["Cd", "temperature", "uv"]);
+        let AttributeValues::Float3(cd) = particles.attributes["Cd"] else {
             panic!("Cd is not a three-float attribute");
         };
         assert_eq!(values(&mut reader, &cd), colors);
-        let AttributeValues::Float2(uv) = particles.attributes[1].values else {
+        let AttributeValues::Float2(uv) = particles.attributes["uv"] else {
             panic!("uv is not a two-float attribute");
         };
         assert_eq!(values(&mut reader, &uv), uvs);
-        let AttributeValues::Float1(temperature) = particles.attributes[2].values else {
+        let AttributeValues::Float1(temperature) = particles.attributes["temperature"] else {
             panic!("temperature is not a float");
         };
         assert_eq!(values(&mut reader, &temperature), temperatures);
@@ -224,9 +197,10 @@ mod tests {
                 .finish()
                 .unwrap();
         });
-        let [positions_only, empty] = &points[..] else {
-            panic!("expected two points objects, got {points:?}");
-        };
+        let names: Vec<_> = points.keys().map(String::as_str).collect();
+        assert_eq!(names, ["empty", "positions_only"]);
+        let positions_only = &points["positions_only"];
+        let empty = &points["empty"];
         assert!(positions_only.velocities.is_none());
         assert!(positions_only.widths.is_none());
         assert!(positions_only.attributes.is_empty());

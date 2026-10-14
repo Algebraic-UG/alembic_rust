@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::io::{Read, Seek};
 use std::marker::PhantomData;
 
@@ -14,19 +15,10 @@ use crate::read::tree::{FirstSample, PropertyValue, walk_hierarchy};
 pub struct ArchiveContents {
     /// The archive metadata.
     pub metadata: MetaData,
-    /// The points objects, in file order.
-    pub points: Vec<Points>,
-    /// The user data blobs, in file order.
-    pub user_data: Vec<UserData>,
-}
-
-/// A binary blob written with [`ArchiveWriter::user_data`](crate::ArchiveWriter::user_data).
-#[derive(Debug, Clone)]
-pub struct UserData {
-    /// The blob's name.
-    pub name: String,
-    /// Where the blob's bytes are stored.
-    pub bytes: ArrayHandle<u8>,
+    /// The points objects, by name.
+    pub points: BTreeMap<String, Points>,
+    /// The user data blobs, by name.
+    pub user_data: BTreeMap<String, ArrayHandle<u8>>,
 }
 
 /// Where an array of `T` is stored in the archive.
@@ -139,11 +131,10 @@ pub fn read_archive<R: Read + Seek>(source: R) -> Result<(ArchiveContents, Archi
     let user_data = hierarchy
         .top_properties
         .into_iter()
-        .filter_map(|property| match property.value {
-            PropertyValue::Array(sample) if sample.data_type == USER_DATA_BYTE => Some(UserData {
-                name: property.name,
-                bytes: ArrayHandle::of_first_sample(sample),
-            }),
+        .filter_map(|(name, value)| match value {
+            PropertyValue::Array(sample) if sample.data_type == USER_DATA_BYTE => {
+                Some((name, ArrayHandle::of_first_sample(sample)))
+            }
             _ => None,
         })
         .collect();
@@ -211,22 +202,22 @@ mod tests {
                 .unwrap();
         });
         let (contents, mut reader) = read(file).unwrap();
-        let names: Vec<_> = contents.user_data.iter().map(|u| u.name.as_str()).collect();
+        let names: Vec<_> = contents.user_data.keys().map(String::as_str).collect();
         assert_eq!(names, ["bytes", "empty", "one"]);
         assert_eq!(contents.points.len(), 1);
 
-        let mut bytes = vec![0u8; contents.user_data[0].bytes.len()];
+        let mut bytes = vec![0u8; contents.user_data["bytes"].len()];
         reader
-            .read_into(&contents.user_data[0].bytes, &mut bytes)
+            .read_into(&contents.user_data["bytes"], &mut bytes)
             .unwrap();
         assert_eq!(bytes, every_byte_value);
-        assert!(contents.user_data[1].bytes.is_empty());
+        assert!(contents.user_data["empty"].is_empty());
         reader
-            .read_into(&contents.user_data[1].bytes, &mut [])
+            .read_into(&contents.user_data["empty"], &mut [])
             .unwrap();
         let mut one = [0u8];
         reader
-            .read_into(&contents.user_data[2].bytes, &mut one)
+            .read_into(&contents.user_data["one"], &mut one)
             .unwrap();
         assert_eq!(one, [42]);
     }

@@ -38,15 +38,10 @@ fn long_names_need_wider_header_fields() {
             archive.user_data(name, &[1]).unwrap();
         }
     });
-    for (points, name) in contents
-        .points
-        .iter()
-        .zip([&two_byte_name, &four_byte_name])
-    {
-        assert_eq!(&points.name, name);
-        assert_eq!(&points.attributes[0].name, name);
+    for name in [&two_byte_name, &four_byte_name] {
+        assert!(contents.points[name].attributes.contains_key(name));
     }
-    let user_data_names: Vec<_> = contents.user_data.iter().map(|u| &u.name).collect();
+    let user_data_names: Vec<_> = contents.user_data.keys().collect();
     assert_eq!(user_data_names, [&two_byte_name, &four_byte_name]);
 }
 
@@ -67,8 +62,11 @@ fn non_ascii_names_and_metadata_survive() {
         contents.metadata.get("_ai_Description"),
         Some("Partikel über Wasser, 粒子")
     );
-    assert_eq!(contents.points[0].name, "粒子");
-    assert_eq!(contents.points[0].attributes[0].name, "température");
+    assert!(
+        contents.points["粒子"]
+            .attributes
+            .contains_key("température")
+    );
 }
 
 #[test]
@@ -84,14 +82,14 @@ fn special_float_values_are_kept_bit_for_bit() {
         points.attribute("a", Attribute::Float3(&unusual)).unwrap();
         points.finish().unwrap();
     });
-    let points = &contents.points[0];
+    let points = &contents.points["p"];
     assert_eq!(
         bits_of(&values(&mut reader, &points.positions)),
         bits_of(&unusual)
     );
     let velocities = points.velocities.as_ref().unwrap();
     assert_eq!(bits_of(&values(&mut reader, velocities)), bits_of(&unusual));
-    let AttributeValues::Float3(attribute) = points.attributes[0].values else {
+    let AttributeValues::Float3(attribute) = points.attributes["a"] else {
         panic!("expected a three-float attribute");
     };
     assert_eq!(bits_of(&values(&mut reader, &attribute)), bits_of(&unusual));
@@ -108,7 +106,7 @@ fn many_points_round_trip() {
         points.widths(&widths).unwrap();
         points.finish().unwrap();
     });
-    let points = &contents.points[0];
+    let points = &contents.points["p"];
     assert_eq!(values(&mut reader, &points.positions), positions);
     assert_eq!(values(&mut reader, points.widths.as_ref().unwrap()), widths);
     assert_eq!(
@@ -127,10 +125,10 @@ fn point_arrays_reject_buffers_of_the_wrong_length() {
             .unwrap();
         points.finish().unwrap();
     });
-    let points = &contents.points[0];
+    let points = &contents.points["p"];
     let too_short = reader.read_into(&points.positions, &mut [[0.0; 3]; 2]);
     let too_long = reader.read_into(points.widths.as_ref().unwrap(), &mut [0.0; 4]);
-    let AttributeValues::Float2(uv) = points.attributes[0].values else {
+    let AttributeValues::Float2(uv) = points.attributes["uv"] else {
         panic!("expected a two-float attribute");
     };
     let empty = reader.read_into(&uv, &mut []);
@@ -155,13 +153,12 @@ fn streamed_user_data_reads_back_as_a_stream() {
             .unwrap();
         archive.user_data("small", &[7, 8, 9]).unwrap();
     });
-    let [blob_data, small] = &contents.user_data[..] else {
-        panic!("expected two blobs");
-    };
+    let blob_data = &contents.user_data["blob"];
+    let small = &contents.user_data["small"];
 
     let mut whole = Vec::new();
     reader
-        .user_data_reader(&blob_data.bytes)
+        .user_data_reader(blob_data)
         .unwrap()
         .read_to_end(&mut whole)
         .unwrap();
@@ -169,7 +166,7 @@ fn streamed_user_data_reads_back_as_a_stream() {
 
     let mut in_small_reads = Vec::new();
     {
-        let mut stream = reader.user_data_reader(&blob_data.bytes).unwrap();
+        let mut stream = reader.user_data_reader(blob_data).unwrap();
         let mut chunk = [0u8; 100];
         loop {
             let read = stream.read(&mut chunk).unwrap();
@@ -183,10 +180,10 @@ fn streamed_user_data_reads_back_as_a_stream() {
 
     let mut start = [0u8; 10];
     reader
-        .user_data_reader(&blob_data.bytes)
+        .user_data_reader(blob_data)
         .unwrap()
         .read_exact(&mut start)
         .unwrap();
     assert_eq!(start, blob[..10]);
-    assert_eq!(values(&mut reader, &small.bytes), [7, 8, 9]);
+    assert_eq!(values(&mut reader, small), [7, 8, 9]);
 }
