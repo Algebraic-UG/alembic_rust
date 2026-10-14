@@ -137,8 +137,12 @@ impl<W: Write + Seek> ArchiveWriter<W> {
             return Ok(Err(error));
         }
         let streamed = writer.complete();
-        let len = usize::try_from(streamed.len()).map_err(|_| Error::FileTooLarge)?;
+        let byte_count = streamed.len();
         let sample = self.output.finish_sample(streamed)?;
+        let Ok(len) = usize::try_from(byte_count) else {
+            self.output.ogawa.poison();
+            return Err(Error::FileTooLarge);
+        };
         self.top_object_properties.add_claimed_array(
             &mut self.output,
             name,
