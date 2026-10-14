@@ -90,6 +90,9 @@ impl<W: Write + Seek> ArchiveWriter<W> {
     /// `IArrayProperty(archive.getTop().getProperties(), name)`. Blob names must be unique among
     /// blobs but may match object names.
     ///
+    /// To write a blob piece by piece instead of from one slice, use
+    /// [`user_data_with`](ArchiveWriter::user_data_with).
+    ///
     /// # Errors
     ///
     /// [`Error::InvalidName`] or [`Error::DuplicateName`] if `name` is empty, contains `/` or
