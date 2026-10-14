@@ -52,7 +52,7 @@ impl<T> ArrayHandle<T> {
 }
 
 /// Reads array values from an archive opened with [`read_archive`].
-pub struct ArchiveReader<R: Read + Seek> {
+pub struct ArchiveReader<R> {
     ogawa: OgawaReader<R>,
 }
 

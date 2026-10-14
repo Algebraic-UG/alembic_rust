@@ -18,10 +18,16 @@ pub(crate) struct StreamedRecord {
     payload_len: u64,
 }
 
-pub(crate) struct OgawaWriter<W: Write + Seek> {
+pub(crate) struct OgawaWriter<W: Write> {
     out: BufWriter<W>,
     position: u64,
     poisoned: bool,
+}
+
+impl<W: Write> OgawaWriter<W> {
+    pub(crate) fn poison(&mut self) {
+        self.poisoned = true;
+    }
 }
 
 impl<W: Write + Seek> OgawaWriter<W> {
@@ -65,10 +71,6 @@ impl<W: Write + Seek> OgawaWriter<W> {
             return Err(Error::Poisoned);
         }
         Ok(())
-    }
-
-    pub(crate) fn poison(&mut self) {
-        self.poisoned = true;
     }
 
     pub(crate) fn begin_streamed_data(&mut self, first_part: &[u8]) -> io::Result<StreamedRecord> {

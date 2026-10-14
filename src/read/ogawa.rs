@@ -33,7 +33,7 @@ impl DataSpan {
     }
 }
 
-pub(crate) struct OgawaReader<R: Read + Seek> {
+pub(crate) struct OgawaReader<R> {
     source: R,
     file_len: u64,
 }
