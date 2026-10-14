@@ -90,6 +90,7 @@ mod write;
 mod round_trip_tests;
 
 pub use error::{Error, Result};
+pub use format::attribute::{AttributeElement, AttributeType};
 pub use format::metadata::MetaData;
 pub use read::{
     ArchiveContents, ArchiveReader, ArrayHandle, AttributeValues, Points, read_archive,
