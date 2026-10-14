@@ -10,7 +10,7 @@ fn main() -> alembic_rust::Result<()> {
     let points_dropped_before_finish = archive.begin_points("lost", &[[0.0; 3]])?;
     drop(points_dropped_before_finish);
     match archive.finish() {
-        Err(Error::UnfinishedObject { .. }) => Ok(()),
+        Err(Error::Unfinished { .. }) => Ok(()),
         other => panic!("expected the archive to refuse finishing, got {other:?}"),
     }
 }

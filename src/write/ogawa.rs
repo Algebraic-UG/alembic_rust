@@ -9,6 +9,14 @@ use crate::format::ogawa::{
     ROOT_POSITION_OFFSET,
 };
 
+const UNPATCHED_RECORD_LENGTH: u64 = 0;
+
+#[derive(Debug)]
+pub(crate) struct StreamedRecord {
+    record_start: u64,
+    payload_len: u64,
+}
+
 pub(crate) struct OgawaWriter<W: Write + Seek> {
     out: BufWriter<W>,
     position: u64,
@@ -48,6 +56,45 @@ impl<W: Write + Seek> OgawaWriter<W> {
                 w.out.write_all(part)?;
             }
             Ok(DataRef(record_start))
+        })
+    }
+
+    pub(crate) fn begin_streamed_data(&mut self, first_part: &[u8]) -> Result<StreamedRecord> {
+        let payload_len = first_part.len() as u64;
+        self.poison_on_error(|w| {
+            let record_start = w.claim_record_space(payload_len)?;
+            w.out.write_u64::<LittleEndian>(UNPATCHED_RECORD_LENGTH)?;
+            w.out.write_all(first_part)?;
+            Ok(StreamedRecord {
+                record_start,
+                payload_len,
+            })
+        })
+    }
+
+    pub(crate) fn append_to_streamed_data(
+        &mut self,
+        record: &mut StreamedRecord,
+        part: &[u8],
+    ) -> Result<()> {
+        self.poison_on_error(|w| {
+            w.position = w
+                .position
+                .checked_add(part.len() as u64)
+                .filter(|&record_end| record_end < INVALID_GROUP_POSITION)
+                .ok_or(Error::FileTooLarge)?;
+            w.out.write_all(part)?;
+            record.payload_len += part.len() as u64;
+            Ok(())
+        })
+    }
+
+    pub(crate) fn finish_streamed_data(&mut self, record: StreamedRecord) -> Result<DataRef> {
+        self.poison_on_error(|w| {
+            w.out.seek(SeekFrom::Start(record.record_start))?;
+            w.out.write_u64::<LittleEndian>(record.payload_len)?;
+            w.out.seek(SeekFrom::Start(w.position))?;
+            Ok(DataRef(record.record_start))
         })
     }
 
@@ -137,6 +184,23 @@ mod tests {
         expected.extend_from_slice(&DATA_REFERENCE_BIT.to_le_bytes());
         expected.extend_from_slice(&0u64.to_le_bytes());
         assert_eq!(bytes, expected);
+    }
+
+    #[test]
+    fn streamed_data_matches_data_written_at_once() {
+        let mut at_once = new_writer();
+        let data = at_once.write_data(&[b"head", b"abcdef"]).unwrap();
+        let group = at_once.write_group(&[data.into()]).unwrap();
+        let expected = at_once.finish(group).unwrap().into_inner();
+
+        let mut streamed = new_writer();
+        let mut record = streamed.begin_streamed_data(b"head").unwrap();
+        for part in [&b"ab"[..], b"", b"cde", b"f"] {
+            streamed.append_to_streamed_data(&mut record, part).unwrap();
+        }
+        let data = streamed.finish_streamed_data(record).unwrap();
+        let group = streamed.write_group(&[data.into()]).unwrap();
+        assert_eq!(streamed.finish(group).unwrap().into_inner(), expected);
     }
 
     #[test]

@@ -22,11 +22,11 @@ fn main() -> alembic_rust::Result<()> {
         println!("  {key}={value}");
     }
     for user_data in &contents.user_data {
-        print_values(
-            &mut reader,
-            &format!("user data {}", user_data.name),
-            &user_data.bytes,
-        )?;
+        let mut bytes = Vec::new();
+        reader
+            .user_data_reader(&user_data.bytes)?
+            .read_to_end(&mut bytes)?;
+        println!("user data {}: {bytes:?}", user_data.name);
     }
     for points in &contents.points {
         println!("points {}: {} points", points.name, points.positions.len());

@@ -15,6 +15,10 @@ pub(crate) fn placeholder_sample_digest(_sample_bytes: &[u8]) -> Digest {
     Digest::PLACEHOLDER
 }
 
+pub(crate) fn placeholder_streamed_sample_digest() -> Digest {
+    Digest::PLACEHOLDER
+}
+
 pub(crate) struct ObjectHierarchyHashes {
     properties: Digest,
     children: Digest,

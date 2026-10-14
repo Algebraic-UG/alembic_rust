@@ -8,7 +8,7 @@
 //! # Writing
 //!
 //! ```
-//! use std::io::Cursor;
+//! use std::io::{Cursor, Write};
 //!
 //! use alembic_rust::{ArchiveWriter, Attribute};
 //!
@@ -18,6 +18,7 @@
 //! let mut archive = ArchiveWriter::create(Cursor::new(Vec::new()))?;
 //! archive.metadata_mut().set("_ai_Application", "my app")?;
 //! archive.user_data("settings", b"{}")?;
+//! archive.user_data_with("log", |w| writeln!(w, "simulated 100 frames"))?;
 //!
 //! let mut particles = archive.begin_points("particles", &positions)?;
 //! particles.velocities(&[[0.0, 1.0, 0.0]; 3])?;
@@ -37,16 +38,19 @@
 //! # Reading
 //!
 //! [`read_archive`] reads only the archive's structure. Array values are read on demand with
-//! [`ArchiveReader::read_into`], straight into buffers the caller provides.
+//! [`ArchiveReader::read_into`], straight into buffers the caller provides, or as a stream with
+//! [`ArchiveReader::user_data_reader`].
 //!
 //! ```
-//! use std::io::Cursor;
+//! use std::io::{Cursor, Read};
 //!
 //! use alembic_rust::{ArchiveWriter, AttributeValues, read_archive};
 //!
 //! # fn main() -> alembic_rust::Result<()> {
 //! # let mut archive = ArchiveWriter::create(Cursor::new(Vec::new()))?;
 //! # archive.metadata_mut().set("_ai_Application", "my app")?;
+//! # archive.user_data("settings", b"{}")?;
+//! # archive.user_data("log", b"simulated 100 frames")?;
 //! # archive.begin_points("particles", &[[1.0, 2.0, 3.0]])?.finish()?;
 //! # let file = archive.finish()?.into_inner();
 //! let (contents, mut reader) = read_archive(Cursor::new(file))?;
@@ -63,10 +67,15 @@
 //!         }
 //!     }
 //! }
-//! for blob in &contents.user_data {
-//!     let mut bytes = vec![0u8; blob.bytes.len()];
-//!     reader.read_into(&blob.bytes, &mut bytes)?;
-//! }
+//! let [settings, log] = &contents.user_data[..] else {
+//!     panic!("expected two blobs");
+//! };
+//! let mut bytes = vec![0u8; settings.bytes.len()];
+//! reader.read_into(&settings.bytes, &mut bytes)?;
+//!
+//! let mut text = String::new();
+//! reader.user_data_reader(&log.bytes)?.read_to_string(&mut text)?;
+//! assert_eq!(text, "simulated 100 frames");
 //! # Ok(())
 //! # }
 //! ```
@@ -88,4 +97,4 @@ pub use read::{
     ArchiveContents, ArchiveReader, ArrayHandle, AttributeValues, PointAttribute, Points, UserData,
     read_archive,
 };
-pub use write::{ArchiveWriter, Attribute, PointsWriter};
+pub use write::{ArchiveWriter, Attribute, PointsWriter, UserDataWriter};

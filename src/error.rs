@@ -61,9 +61,9 @@ pub enum Error {
 
     /// A [`PointsWriter`](crate::PointsWriter) was dropped without being finished, so the
     /// archive cannot be completed.
-    #[error("object {name:?} was dropped before it was finished")]
-    UnfinishedObject {
-        /// The name of the dropped object.
+    #[error("{name:?} was dropped before it was finished")]
+    Unfinished {
+        /// The name of the dropped points object.
         name: String,
     },
 
