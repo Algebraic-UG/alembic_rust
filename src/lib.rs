@@ -18,7 +18,7 @@
 //! let mut archive = ArchiveWriter::create(Cursor::new(Vec::new()))?;
 //! archive.metadata_mut().set("_ai_Application", "my app")?;
 //! archive.user_data("settings", b"{}")?;
-//! archive.user_data_with("log", |w| writeln!(w, "simulated 100 frames"))?;
+//! archive.user_data_with("log", |w| writeln!(w, "simulated 100 frames"))??;
 //!
 //! let mut particles = archive.begin_points("particles", &positions)?;
 //! particles.velocities(&[[0.0, 1.0, 0.0]; 3])?;

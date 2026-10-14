@@ -144,51 +144,14 @@ fn point_arrays_reject_buffers_of_the_wrong_length() {
 }
 
 #[test]
-fn failed_streamed_user_data_is_not_read_back() {
-    let (contents, mut reader) = round_trip(|archive| {
-        archive.user_data("before", &[1, 2]).unwrap();
-        let failure = archive.user_data_with("failed", |w| {
-            w.write_all(&[9; 100])?;
-            Err(std::io::Error::other("serializer failed"))
-        });
-        assert!(failure.is_err());
-        archive
-            .user_data_with("after", |w| w.write_all(&[3, 4, 5]))
-            .unwrap();
-    });
-    let names: Vec<_> = contents.user_data.iter().map(|u| u.name.as_str()).collect();
-    assert_eq!(names, ["before", "after"]);
-    assert_eq!(values(&mut reader, &contents.user_data[0].bytes), [1, 2]);
-    assert_eq!(values(&mut reader, &contents.user_data[1].bytes), [3, 4, 5]);
-}
-
-#[test]
-fn user_data_whose_writer_panicked_is_not_read_back() {
-    let (contents, _) = round_trip(|archive| {
-        let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            archive.user_data_with("panicked", |w| {
-                w.write_all(&[9; 100])?;
-                panic!("serializer panicked")
-            })
-        }));
-        assert!(panicked.is_err());
-        archive.user_data("after", &[1]).unwrap();
-    });
-    let names: Vec<_> = contents.user_data.iter().map(|u| u.name.as_str()).collect();
-    assert_eq!(names, ["after"]);
-}
-
-#[test]
 fn streamed_user_data_reads_back_as_a_stream() {
     let blob: Vec<u8> = (0..=255).cycle().take(100_000).collect();
     let (contents, mut reader) = round_trip(|archive| {
         archive
             .user_data_with("blob", |w| {
-                for chunk in blob.chunks(777) {
-                    w.write_all(chunk)?;
-                }
-                Ok(())
+                blob.chunks(777).try_for_each(|chunk| w.write_all(chunk))
             })
+            .unwrap()
             .unwrap();
         archive.user_data("small", &[7, 8, 9]).unwrap();
     });

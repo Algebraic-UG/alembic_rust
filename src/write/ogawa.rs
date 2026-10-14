@@ -67,6 +67,10 @@ impl<W: Write + Seek> OgawaWriter<W> {
         Ok(())
     }
 
+    pub(crate) fn poison(&mut self) {
+        self.poisoned = true;
+    }
+
     pub(crate) fn begin_streamed_data(&mut self, first_part: &[u8]) -> io::Result<StreamedRecord> {
         let mut record = StreamedRecord {
             record_start: self.position,
