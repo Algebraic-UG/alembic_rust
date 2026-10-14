@@ -247,8 +247,8 @@ impl<W: Write + Seek> ArchiveWriter<W> {
 
 /// Writes the bytes of a blob, inside [`ArchiveWriter::user_data_with`].
 ///
-/// Every write goes straight to the archive's stream and can fail only if writing to the
-/// stream fails. [`flush`](Write::flush) does nothing: the archive is complete only after
+/// Every write goes straight to the archive's stream and fails once writing to the stream has
+/// failed. [`flush`](Write::flush) does nothing: the archive is complete only after
 /// [`ArchiveWriter::finish`].
 pub struct UserDataWriter<'a, W: Write + Seek> {
     output: &'a mut ArchiveOutput<W>,
