@@ -67,14 +67,12 @@
 //!         }
 //!     }
 //! }
-//! let [settings, log] = &contents.user_data[..] else {
-//!     panic!("expected two blobs");
-//! };
-//! let mut bytes = vec![0u8; settings.bytes.len()];
-//! reader.read_into(&settings.bytes, &mut bytes)?;
+//! let settings = &contents.user_data["settings"];
+//! let mut bytes = vec![0u8; settings.len()];
+//! reader.read_into(settings, &mut bytes)?;
 //!
 //! let mut text = String::new();
-//! reader.user_data_reader(&log.bytes)?.read_to_string(&mut text)?;
+//! reader.user_data_reader(&contents.user_data["log"])?.read_to_string(&mut text)?;
 //! assert_eq!(text, "simulated 100 frames");
 //! # Ok(())
 //! # }
@@ -94,7 +92,7 @@ mod round_trip_tests;
 pub use error::{Error, Result};
 pub use format::metadata::MetaData;
 pub use read::{
-    ArchiveContents, ArchiveReader, ArrayHandle, AttributeValues, PointAttribute, Points, UserData,
+    ArchiveContents, ArchiveReader, ArrayHandle, AttributeValues, PointAttribute, Points,
     read_archive,
 };
 pub use write::{ArchiveWriter, Attribute, PointsWriter, UserDataWriter};

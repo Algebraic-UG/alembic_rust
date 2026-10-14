@@ -46,7 +46,7 @@ fn long_names_need_wider_header_fields() {
         assert_eq!(&points.name, name);
         assert_eq!(&points.attributes[0].name, name);
     }
-    let user_data_names: Vec<_> = contents.user_data.iter().map(|u| &u.name).collect();
+    let user_data_names: Vec<_> = contents.user_data.keys().collect();
     assert_eq!(user_data_names, [&two_byte_name, &four_byte_name]);
 }
 
@@ -155,13 +155,12 @@ fn streamed_user_data_reads_back_as_a_stream() {
             .unwrap();
         archive.user_data("small", &[7, 8, 9]).unwrap();
     });
-    let [blob_data, small] = &contents.user_data[..] else {
-        panic!("expected two blobs");
-    };
+    let blob_data = &contents.user_data["blob"];
+    let small = &contents.user_data["small"];
 
     let mut whole = Vec::new();
     reader
-        .user_data_reader(&blob_data.bytes)
+        .user_data_reader(blob_data)
         .unwrap()
         .read_to_end(&mut whole)
         .unwrap();
@@ -169,7 +168,7 @@ fn streamed_user_data_reads_back_as_a_stream() {
 
     let mut in_small_reads = Vec::new();
     {
-        let mut stream = reader.user_data_reader(&blob_data.bytes).unwrap();
+        let mut stream = reader.user_data_reader(blob_data).unwrap();
         let mut chunk = [0u8; 100];
         loop {
             let read = stream.read(&mut chunk).unwrap();
@@ -183,10 +182,10 @@ fn streamed_user_data_reads_back_as_a_stream() {
 
     let mut start = [0u8; 10];
     reader
-        .user_data_reader(&blob_data.bytes)
+        .user_data_reader(blob_data)
         .unwrap()
         .read_exact(&mut start)
         .unwrap();
     assert_eq!(start, blob[..10]);
-    assert_eq!(values(&mut reader, &small.bytes), [7, 8, 9]);
+    assert_eq!(values(&mut reader, small), [7, 8, 9]);
 }

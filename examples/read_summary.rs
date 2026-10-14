@@ -21,12 +21,10 @@ fn main() -> alembic_rust::Result<()> {
     for (key, value) in contents.metadata.entries() {
         println!("  {key}={value}");
     }
-    for user_data in &contents.user_data {
+    for (name, handle) in &contents.user_data {
         let mut bytes = Vec::new();
-        reader
-            .user_data_reader(&user_data.bytes)?
-            .read_to_end(&mut bytes)?;
-        println!("user data {}: {bytes:?}", user_data.name);
+        reader.user_data_reader(handle)?.read_to_end(&mut bytes)?;
+        println!("user data {name}: {bytes:?}");
     }
     for points in &contents.points {
         println!("points {}: {} points", points.name, points.positions.len());

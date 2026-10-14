@@ -71,9 +71,9 @@ fn main() -> alembic_rust::Result<()> {
             }
         }
     }
-    for blob in &contents.user_data {
-        let mut bytes = vec![0u8; blob.bytes.len()];
-        reader.read_into(&blob.bytes, &mut bytes)?;
+    for blob in contents.user_data.values() {
+        let mut bytes = vec![0u8; blob.len()];
+        reader.read_into(blob, &mut bytes)?;
     }
     Ok(())
 }
