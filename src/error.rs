@@ -74,7 +74,7 @@ pub enum Error {
     /// An earlier write failed, or a
     /// [`user_data_with`](crate::ArchiveWriter::user_data_with) closure failed or panicked, so
     /// the archive can no longer be written or completed.
-    #[error("archive is unusable because an earlier write failed")]
+    #[error("archive is unusable after an earlier failure")]
     Poisoned,
 
     /// The file is not an Ogawa archive.
