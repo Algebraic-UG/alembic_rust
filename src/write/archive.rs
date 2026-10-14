@@ -30,7 +30,8 @@ const ALEMBIC_VERSION_VALUE: &str = concat!(
 /// positions, attributes or user data. Only names, metadata, record positions and headers stay
 /// in memory until [`finish`](ArchiveWriter::finish).
 ///
-/// Once writing to the stream fails, the writer is poisoned: every later write returns
+/// Once writing to the stream fails, or a [`user_data_with`](ArchiveWriter::user_data_with)
+/// closure fails or panics, the writer is poisoned: every later write returns
 /// [`Error::Poisoned`] and the archive is never marked complete.
 pub struct ArchiveWriter<W: Write + Seek> {
     output: ArchiveOutput<W>,
@@ -107,36 +108,41 @@ impl<W: Write + Seek> ArchiveWriter<W> {
         )
     }
 
-    /// Stores a binary blob called `name` whose bytes are written by `write`.
+    /// Stores a binary blob called `name` whose bytes `write` writes into a [`UserDataWriter`].
     ///
-    /// `write` gets a [`UserDataWriter`], which implements [`Write`], so serializers and
-    /// [`io::copy`] can write into the archive directly without the whole blob in memory.
-    /// The blob is stored like one from [`user_data`](ArchiveWriter::user_data).
+    /// [`UserDataWriter`] implements [`Write`], so serializers and [`io::copy`] can write into
+    /// the archive without the whole blob in memory.
     ///
-    /// The blob is added only if `write` returns `Ok`. If it returns an error or panics, the
-    /// bytes already written stay in the file unused, the name stays taken, and the archive
-    /// can still be written and finished.
+    /// The blob is added only if `write` returns `Ok`. Its error is returned unchanged in the
+    /// inner result, this crate's errors in the outer one. If `write` fails or panics, the
+    /// archive is poisoned.
     ///
     /// # Errors
     ///
     /// [`Error::InvalidName`] or [`Error::DuplicateName`] if `name` is empty, contains `/` or
-    /// is already used by another blob; `write` is then not called. Otherwise the error `write`
-    /// returns: an error of this crate that it passed on is returned as it is, and any other
-    /// error as [`Error::Io`].
-    pub fn user_data_with(
+    /// is already used by another blob; `write` is then not called.
+    pub fn user_data_with<E>(
         &mut self,
         name: &str,
-        write: impl FnOnce(&mut UserDataWriter<'_, W>) -> io::Result<()>,
-    ) -> Result<()> {
+        write: impl FnOnce(&mut UserDataWriter<'_, W>) -> std::result::Result<(), E>,
+    ) -> Result<std::result::Result<(), E>> {
+        self.output.ogawa.ensure_usable()?;
         self.top_object_properties.claim_name(name)?;
         let mut writer = UserDataWriter {
             output: &mut self.output,
             sample: StreamedSample::default(),
+            completed: false,
         };
-        write(&mut writer).map_err(error_from_io)?;
-        let streamed = writer.sample;
-        let len = usize::try_from(streamed.len()).map_err(|_| Error::FileTooLarge)?;
+        if let Err(error) = write(&mut writer) {
+            return Ok(Err(error));
+        }
+        let streamed = writer.complete();
+        let byte_count = streamed.len();
         let sample = self.output.finish_sample(streamed)?;
+        let Ok(len) = usize::try_from(byte_count) else {
+            self.output.ogawa.poison();
+            return Err(Error::FileTooLarge);
+        };
         self.top_object_properties.add_claimed_array(
             &mut self.output,
             name,
@@ -144,7 +150,8 @@ impl<W: Write + Seek> ArchiveWriter<W> {
             USER_DATA_BYTE,
             sample,
             len,
-        )
+        )?;
+        Ok(Ok(()))
     }
 
     /// Completes the archive and returns the stream.
@@ -240,37 +247,38 @@ impl<W: Write + Seek> ArchiveWriter<W> {
 
 /// Writes the bytes of a blob, inside [`ArchiveWriter::user_data_with`].
 ///
-/// Every write goes straight to the archive's stream. [`flush`](Write::flush) does nothing:
-/// the archive is complete only after [`ArchiveWriter::finish`].
+/// Every write goes straight to the archive's stream and fails once writing to the stream has
+/// failed. [`flush`](Write::flush) does nothing: the archive is complete only after
+/// [`ArchiveWriter::finish`].
 pub struct UserDataWriter<'a, W: Write + Seek> {
     output: &'a mut ArchiveOutput<W>,
     sample: StreamedSample,
+    completed: bool,
+}
+
+impl<W: Write + Seek> UserDataWriter<'_, W> {
+    fn complete(mut self) -> StreamedSample {
+        self.completed = true;
+        std::mem::take(&mut self.sample)
+    }
+}
+
+impl<W: Write + Seek> Drop for UserDataWriter<'_, W> {
+    fn drop(&mut self) {
+        if !self.completed {
+            self.output.ogawa.poison();
+        }
+    }
 }
 
 impl<W: Write + Seek> Write for UserDataWriter<'_, W> {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        self.output
-            .append_to_sample(&mut self.sample, bytes)
-            .map_err(io_error_from)?;
+        self.output.append_to_sample(&mut self.sample, bytes)?;
         Ok(bytes.len())
     }
 
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
-    }
-}
-
-fn io_error_from(error: Error) -> io::Error {
-    match error {
-        Error::Io(io_error) => io_error,
-        other => io::Error::other(other),
-    }
-}
-
-fn error_from_io(error: io::Error) -> Error {
-    match error.downcast::<Error>() {
-        Ok(error) => error,
-        Err(io_error) => Error::Io(io_error),
     }
 }
 
@@ -320,30 +328,43 @@ mod tests {
         let mut streamed = new_archive();
         streamed
             .user_data_with("blob", |w| {
-                for chunk in blob.chunks(3000) {
-                    w.write_all(chunk)?;
-                }
-                Ok(())
+                blob.chunks(3000).try_for_each(|chunk| w.write_all(chunk))
             })
+            .unwrap()
             .unwrap();
-        streamed.user_data_with("empty", |_| Ok(())).unwrap();
+        streamed
+            .user_data_with("empty", |_| Ok::<_, Error>(()))
+            .unwrap()
+            .unwrap();
         assert_eq!(streamed.finish().unwrap().into_inner(), expected);
     }
 
     #[test]
-    fn failed_user_data_is_left_out() {
+    fn closure_errors_come_back_unchanged_and_poison_the_archive() {
         let mut archive = new_archive();
         let failure = archive.user_data_with("blob", |w| {
-            w.write_all(b"partial")?;
-            Err(io::Error::other("serializer failed"))
+            w.write_all(b"partial").unwrap();
+            Err("unsupported value")
         });
-        assert!(matches!(failure, Err(Error::Io(e)) if e.to_string() == "serializer failed"));
+        assert!(matches!(failure, Ok(Err("unsupported value"))));
         assert!(matches!(
-            archive.user_data_with("blob", |_| Ok(())),
-            Err(Error::DuplicateName { .. })
+            archive.user_data("next", &[1]),
+            Err(Error::Poisoned)
         ));
-        let file = archive.finish().unwrap().into_inner();
-        assert!(file.windows(7).any(|w| w == b"partial"));
+        assert!(matches!(archive.finish(), Err(Error::Poisoned)));
+    }
+
+    #[test]
+    fn panicking_closures_poison_the_archive() {
+        let mut archive = new_archive();
+        let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            archive.user_data_with("blob", |w| -> io::Result<()> {
+                w.write_all(b"partial")?;
+                panic!("serializer panicked")
+            })
+        }));
+        assert!(panicked.is_err());
+        assert!(matches!(archive.finish(), Err(Error::Poisoned)));
     }
 
     #[test]
@@ -353,10 +374,11 @@ mod tests {
         let mut called = false;
         let duplicate = archive.user_data_with("blob", |_| {
             called = true;
-            Ok(())
+            Ok::<_, Error>(())
         });
         assert!(matches!(duplicate, Err(Error::DuplicateName { .. })));
         assert!(!called);
+        archive.finish().unwrap();
     }
 
     struct FailingAfter {
@@ -383,18 +405,32 @@ mod tests {
         }
     }
 
-    #[test]
-    fn failed_stream_writes_poison_the_archive() {
+    fn archive_failing_after_one_kibibyte() -> ArchiveWriter<FailingAfter> {
         let sink = FailingAfter {
             written: Cursor::new(Vec::new()),
             capacity: 1024,
         };
-        let mut archive = ArchiveWriter::create(sink).unwrap();
-        let failure = archive.user_data_with("blob", |w| w.write_all(&[0; 64 * 1024]));
-        assert!(matches!(failure, Err(Error::Io(e)) if e.to_string() == "disk full"));
-        let after_failure = archive.user_data_with("next", |w| w.write_all(&[1]));
-        assert!(matches!(after_failure, Err(Error::Poisoned)));
+        ArchiveWriter::create(sink).unwrap()
+    }
+
+    #[test]
+    fn failed_stream_writes_reach_the_closure_and_poison_the_archive() {
+        let mut archive = archive_failing_after_one_kibibyte();
+        let failure = archive
+            .user_data_with("blob", |w| w.write_all(&[0; 64 * 1024]))
+            .unwrap();
+        assert!(matches!(failure, Err(e) if e.to_string() == "disk full"));
         assert!(matches!(archive.finish(), Err(Error::Poisoned)));
+    }
+
+    #[test]
+    fn swallowed_stream_errors_still_fail_the_blob() {
+        let mut archive = archive_failing_after_one_kibibyte();
+        let swallowed = archive.user_data_with("blob", |w| {
+            let _ignored = w.write_all(&[0; 64 * 1024]);
+            Ok::<_, io::Error>(())
+        });
+        assert!(matches!(swallowed, Err(Error::Poisoned)));
     }
 
     #[test]

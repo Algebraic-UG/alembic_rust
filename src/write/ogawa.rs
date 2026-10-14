@@ -1,4 +1,4 @@
-use std::io::{BufWriter, Seek, SeekFrom, Write};
+use std::io::{self, BufWriter, Seek, SeekFrom, Write};
 
 use byteorder::{LittleEndian, WriteBytesExt};
 
@@ -10,6 +10,7 @@ use crate::format::ogawa::{
 };
 
 const UNPATCHED_RECORD_LENGTH: u64 = 0;
+const EARLIER_FAILURE: &str = "an earlier write to the archive failed";
 
 #[derive(Debug)]
 pub(crate) struct StreamedRecord {
@@ -59,38 +60,42 @@ impl<W: Write + Seek> OgawaWriter<W> {
         })
     }
 
-    pub(crate) fn begin_streamed_data(&mut self, first_part: &[u8]) -> Result<StreamedRecord> {
-        let payload_len = first_part.len() as u64;
-        self.poison_on_error(|w| {
-            let record_start = w.claim_record_space(payload_len)?;
-            w.out.write_u64::<LittleEndian>(UNPATCHED_RECORD_LENGTH)?;
-            w.out.write_all(first_part)?;
-            Ok(StreamedRecord {
-                record_start,
-                payload_len,
-            })
-        })
+    pub(crate) fn ensure_usable(&self) -> Result<()> {
+        if self.poisoned {
+            return Err(Error::Poisoned);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn poison(&mut self) {
+        self.poisoned = true;
+    }
+
+    pub(crate) fn begin_streamed_data(&mut self, first_part: &[u8]) -> io::Result<StreamedRecord> {
+        let mut record = StreamedRecord {
+            record_start: self.position,
+            payload_len: 0,
+        };
+        self.stream(&UNPATCHED_RECORD_LENGTH.to_le_bytes())?;
+        self.append_to_streamed_data(&mut record, first_part)?;
+        Ok(record)
     }
 
     pub(crate) fn append_to_streamed_data(
         &mut self,
         record: &mut StreamedRecord,
         part: &[u8],
-    ) -> Result<()> {
-        self.poison_on_error(|w| {
-            w.position = w
-                .position
-                .checked_add(part.len() as u64)
-                .filter(|&record_end| record_end < INVALID_GROUP_POSITION)
-                .ok_or(Error::FileTooLarge)?;
-            w.out.write_all(part)?;
-            record.payload_len += part.len() as u64;
-            Ok(())
-        })
+    ) -> io::Result<()> {
+        self.stream(part)?;
+        record.payload_len = record.payload_len.saturating_add(part.len() as u64);
+        Ok(())
     }
 
     pub(crate) fn finish_streamed_data(&mut self, record: StreamedRecord) -> Result<DataRef> {
         self.poison_on_error(|w| {
+            if w.position >= INVALID_GROUP_POSITION {
+                return Err(Error::FileTooLarge);
+            }
             w.out.seek(SeekFrom::Start(record.record_start))?;
             w.out.write_u64::<LittleEndian>(record.payload_len)?;
             w.out.seek(SeekFrom::Start(w.position))?;
@@ -127,6 +132,18 @@ impl<W: Write + Seek> OgawaWriter<W> {
             Ok(())
         })?;
         self.out.into_inner().map_err(|e| Error::Io(e.into_error()))
+    }
+
+    fn stream(&mut self, bytes: &[u8]) -> io::Result<()> {
+        if self.poisoned {
+            return Err(io::Error::other(EARLIER_FAILURE));
+        }
+        if let Err(error) = self.out.write_all(bytes) {
+            self.poisoned = true;
+            return Err(error);
+        }
+        self.position = self.position.saturating_add(bytes.len() as u64);
+        Ok(())
     }
 
     fn claim_record_space(&mut self, body_len: u64) -> Result<u64> {
@@ -204,6 +221,19 @@ mod tests {
     }
 
     #[test]
+    fn streamed_data_past_the_largest_position_is_too_large() {
+        let mut w = new_writer();
+        w.position = INVALID_GROUP_POSITION - 4;
+        let mut record = w.begin_streamed_data(b"").unwrap();
+        w.append_to_streamed_data(&mut record, b"x").unwrap();
+        assert!(matches!(
+            w.finish_streamed_data(record),
+            Err(Error::FileTooLarge)
+        ));
+        assert!(matches!(w.ensure_usable(), Err(Error::Poisoned)));
+    }
+
+    #[test]
     fn empty_group_writes_nothing() {
         let mut w = new_writer();
         assert_eq!(w.write_group(&[]).unwrap(), GroupRef::EMPTY);
@@ -236,6 +266,17 @@ mod tests {
         fn seek(&mut self, _: SeekFrom) -> std::io::Result<u64> {
             Ok(0)
         }
+    }
+
+    #[test]
+    fn failed_streamed_write_poisons_the_writer() {
+        let mut w = OgawaWriter::new(FailingSink).unwrap();
+        let big_part = vec![0u8; 64 * 1024];
+        let failure = w.begin_streamed_data(&big_part).unwrap_err();
+        assert_eq!(failure.to_string(), "disk full");
+        let refused = w.begin_streamed_data(b"x").unwrap_err();
+        assert_eq!(refused.to_string(), EARLIER_FAILURE);
+        assert!(matches!(w.ensure_usable(), Err(Error::Poisoned)));
     }
 
     #[test]

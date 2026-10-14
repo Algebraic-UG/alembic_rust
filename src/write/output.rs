@@ -1,4 +1,4 @@
-use std::io::{Seek, Write};
+use std::io::{self, Seek, Write};
 
 use crate::error::Result;
 use crate::format::layout::SAMPLES_PER_PROPERTY;
@@ -47,7 +47,7 @@ impl<W: Write + Seek> ArchiveOutput<W> {
         &mut self,
         sample: &mut StreamedSample,
         bytes: &[u8],
-    ) -> Result<()> {
+    ) -> io::Result<()> {
         if bytes.is_empty() {
             return Ok(());
         }
@@ -61,7 +61,7 @@ impl<W: Write + Seek> ArchiveOutput<W> {
             }
         };
         self.ogawa.append_to_streamed_data(record, bytes)?;
-        sample.len += bytes.len() as u64;
+        sample.len = sample.len.saturating_add(bytes.len() as u64);
         Ok(())
     }
 
