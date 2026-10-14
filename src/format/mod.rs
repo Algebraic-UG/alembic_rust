@@ -1,3 +1,4 @@
+pub(crate) mod attribute;
 pub(crate) mod data_type;
 pub(crate) mod layout;
 pub(crate) mod metadata;

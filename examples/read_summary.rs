@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::fs::File;
 use std::io::{Read, Seek};
 
-use alembic_rust::{ArchiveReader, ArrayHandle, AttributeValues, read_archive};
+use alembic_rust::{ArchiveReader, ArrayHandle, AttributeType, read_archive};
 
 fn main() -> alembic_rust::Result<()> {
     let path = env::args()
@@ -40,10 +40,16 @@ fn main() -> alembic_rust::Result<()> {
         }
         for (name, attribute) in &points.attributes {
             let label = format!("  attribute {name}");
-            match attribute {
-                AttributeValues::Float1(values) => print_values(&mut reader, &label, values)?,
-                AttributeValues::Float2(values) => print_values(&mut reader, &label, values)?,
-                AttributeValues::Float3(values) => print_values(&mut reader, &label, values)?,
+            match attribute.attribute_type() {
+                AttributeType::Float1 => {
+                    print_values(&mut reader, &label, &attribute.typed::<f32>()?)?
+                }
+                AttributeType::Float2 => {
+                    print_values(&mut reader, &label, &attribute.typed::<[f32; 2]>()?)?
+                }
+                AttributeType::Float3 => {
+                    print_values(&mut reader, &label, &attribute.typed::<[f32; 3]>()?)?
+                }
             }
         }
     }

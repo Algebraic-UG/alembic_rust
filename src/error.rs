@@ -1,5 +1,7 @@
 use std::io;
 
+use crate::format::attribute::AttributeType;
+
 /// Errors of the writer and the reader.
 ///
 /// Besides the errors listed on each function, any call that writes can fail with
@@ -102,6 +104,15 @@ pub enum Error {
         expected: usize,
         /// The number of elements in the buffer.
         actual: usize,
+    },
+
+    /// An attribute was asked for as a different type than it holds.
+    #[error("attribute holds {actual:?}, not {expected:?}")]
+    AttributeTypeMismatch {
+        /// The type asked for.
+        expected: AttributeType,
+        /// The type the attribute holds.
+        actual: AttributeType,
     },
 }
 

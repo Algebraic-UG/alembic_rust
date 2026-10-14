@@ -10,7 +10,7 @@
 //! ```
 //! use std::io::{Cursor, Write};
 //!
-//! use alembic_rust::{ArchiveWriter, Attribute};
+//! use alembic_rust::ArchiveWriter;
 //!
 //! # fn main() -> alembic_rust::Result<()> {
 //! let positions = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
@@ -23,9 +23,9 @@
 //! let mut particles = archive.begin_points("particles", &positions)?;
 //! particles.velocities(&[[0.0, 1.0, 0.0]; 3])?;
 //! particles.widths(&[0.1, 0.2, 0.3])?;
-//! particles.attribute("Cd", Attribute::Float3(&[[1.0, 0.0, 0.0]; 3]))?;
-//! particles.attribute("uv", Attribute::Float2(&[[0.0, 0.0]; 3]))?;
-//! particles.attribute("temperature", Attribute::Float1(&[20.0, 21.0, 22.0]))?;
+//! particles.attribute("Cd", &[[1.0, 0.0, 0.0]; 3])?;
+//! particles.attribute("uv", &[[0.0, 0.0]; 3])?;
+//! particles.attribute("temperature", &[20.0, 21.0, 22.0])?;
 //! particles.finish()?;
 //!
 //! let file: Vec<u8> = archive.finish()?.into_inner();
@@ -44,7 +44,7 @@
 //! ```
 //! use std::io::{Cursor, Read};
 //!
-//! use alembic_rust::{ArchiveWriter, AttributeValues, read_archive};
+//! use alembic_rust::{ArchiveWriter, read_archive};
 //!
 //! # fn main() -> alembic_rust::Result<()> {
 //! # let mut archive = ArchiveWriter::create(Cursor::new(Vec::new()))?;
@@ -61,9 +61,9 @@
 //!     reader.read_into(&points.positions, &mut positions)?;
 //!
 //!     for attribute in points.attributes.values() {
-//!         if let AttributeValues::Float1(values) = attribute {
+//!         if let Ok(values) = attribute.typed::<f32>() {
 //!             let mut buffer = vec![0.0f32; values.len()];
-//!             reader.read_into(values, &mut buffer)?;
+//!             reader.read_into(&values, &mut buffer)?;
 //!         }
 //!     }
 //! }
@@ -90,8 +90,9 @@ mod write;
 mod round_trip_tests;
 
 pub use error::{Error, Result};
+pub use format::attribute::{AttributeElement, AttributeType};
 pub use format::metadata::MetaData;
 pub use read::{
-    ArchiveContents, ArchiveReader, ArrayHandle, AttributeValues, Points, read_archive,
+    ArchiveContents, ArchiveReader, ArrayHandle, AttributeHandle, Points, read_archive,
 };
-pub use write::{ArchiveWriter, Attribute, PointsWriter, UserDataWriter};
+pub use write::{ArchiveWriter, PointsWriter, UserDataWriter};

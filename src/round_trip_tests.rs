@@ -1,9 +1,8 @@
 use std::io::{Cursor, Read, Write};
 
 use crate::error::Error;
-use crate::read::{ArchiveContents, ArchiveReader, ArrayHandle, AttributeValues, read_archive};
+use crate::read::{ArchiveContents, ArchiveReader, ArrayHandle, read_archive};
 use crate::write::ArchiveWriter;
-use crate::write::Attribute;
 
 type Reader = ArchiveReader<Cursor<Vec<u8>>>;
 
@@ -33,7 +32,7 @@ fn long_names_need_wider_header_fields() {
     let (contents, _) = round_trip(|archive| {
         for name in [&two_byte_name, &four_byte_name] {
             let mut points = archive.begin_points(name, &[[0.0; 3]]).unwrap();
-            points.attribute(name, Attribute::Float1(&[1.0])).unwrap();
+            points.attribute(name, &[1.0]).unwrap();
             points.finish().unwrap();
             archive.user_data(name, &[1]).unwrap();
         }
@@ -53,9 +52,7 @@ fn non_ascii_names_and_metadata_survive() {
             .set("_ai_Description", "Partikel über Wasser, 粒子")
             .unwrap();
         let mut points = archive.begin_points("粒子", &[[0.0; 3]]).unwrap();
-        points
-            .attribute("température", Attribute::Float1(&[1.0]))
-            .unwrap();
+        points.attribute("température", &[1.0]).unwrap();
         points.finish().unwrap();
     });
     assert_eq!(
@@ -79,7 +76,7 @@ fn special_float_values_are_kept_bit_for_bit() {
     let (contents, mut reader) = round_trip(|archive| {
         let mut points = archive.begin_points("p", &unusual).unwrap();
         points.velocities(&unusual).unwrap();
-        points.attribute("a", Attribute::Float3(&unusual)).unwrap();
+        points.attribute("a", &unusual).unwrap();
         points.finish().unwrap();
     });
     let points = &contents.points["p"];
@@ -89,9 +86,7 @@ fn special_float_values_are_kept_bit_for_bit() {
     );
     let velocities = points.velocities.as_ref().unwrap();
     assert_eq!(bits_of(&values(&mut reader, velocities)), bits_of(&unusual));
-    let AttributeValues::Float3(attribute) = points.attributes["a"] else {
-        panic!("expected a three-float attribute");
-    };
+    let attribute = points.attributes["a"].typed::<[f32; 3]>().unwrap();
     assert_eq!(bits_of(&values(&mut reader, &attribute)), bits_of(&unusual));
 }
 
@@ -120,17 +115,13 @@ fn point_arrays_reject_buffers_of_the_wrong_length() {
     let (contents, mut reader) = round_trip(|archive| {
         let mut points = archive.begin_points("p", &[[0.0; 3]; 3]).unwrap();
         points.widths(&[1.0; 3]).unwrap();
-        points
-            .attribute("uv", Attribute::Float2(&[[0.0; 2]; 3]))
-            .unwrap();
+        points.attribute("uv", &[[0.0; 2]; 3]).unwrap();
         points.finish().unwrap();
     });
     let points = &contents.points["p"];
     let too_short = reader.read_into(&points.positions, &mut [[0.0; 3]; 2]);
     let too_long = reader.read_into(points.widths.as_ref().unwrap(), &mut [0.0; 4]);
-    let AttributeValues::Float2(uv) = points.attributes["uv"] else {
-        panic!("expected a two-float attribute");
-    };
+    let uv = points.attributes["uv"].typed::<[f32; 2]>().unwrap();
     let empty = reader.read_into(&uv, &mut []);
     for (result, actual) in [(too_short, 2), (too_long, 4), (empty, 0)] {
         assert!(
