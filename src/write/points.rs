@@ -19,7 +19,7 @@ use crate::write::compound::CompoundWriter;
 /// Dropping it unfinished makes [`ArchiveWriter::finish`] fail with
 /// [`Error::Unfinished`].
 #[must_use = "a points object is only added to the archive by calling finish()"]
-pub struct PointsWriter<'a, W: Write + Seek> {
+pub struct PointsWriter<'a, W: Write> {
     archive: &'a mut ArchiveWriter<W>,
     name: String,
     num_points: usize,
@@ -171,7 +171,7 @@ impl<W: Write + Seek> PointsWriter<'_, W> {
     }
 }
 
-impl<W: Write + Seek> Drop for PointsWriter<'_, W> {
+impl<W: Write> Drop for PointsWriter<'_, W> {
     fn drop(&mut self) {
         if !self.finished {
             self.archive.abandon_child_object(&self.name);

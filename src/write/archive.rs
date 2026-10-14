@@ -33,7 +33,7 @@ const ALEMBIC_VERSION_VALUE: &str = concat!(
 /// Once writing to the stream fails, or a [`user_data_with`](ArchiveWriter::user_data_with)
 /// closure fails or panics, the writer is poisoned: every later write returns
 /// [`Error::Poisoned`] and the archive is never marked complete.
-pub struct ArchiveWriter<W: Write + Seek> {
+pub struct ArchiveWriter<W: Write> {
     output: ArchiveOutput<W>,
     ogawa_file_version: DataRef,
     library_version: DataRef,
@@ -54,6 +54,12 @@ impl ArchiveWriter<File> {
     /// Creates (or truncates) the file at `path` and starts an archive in it.
     pub fn create_file(path: impl AsRef<Path>) -> Result<Self> {
         Self::create(File::create(path)?)
+    }
+}
+
+impl<W: Write> ArchiveWriter<W> {
+    pub(crate) fn abandon_child_object(&mut self, name: &str) {
+        self.abandoned_object.get_or_insert_with(|| name.to_owned());
     }
 }
 
@@ -196,10 +202,6 @@ impl<W: Write + Seek> ArchiveWriter<W> {
         self.top_object_children.names.claim(name)
     }
 
-    pub(crate) fn abandon_child_object(&mut self, name: &str) {
-        self.abandoned_object.get_or_insert_with(|| name.to_owned());
-    }
-
     pub(crate) fn add_claimed_child_object(
         &mut self,
         name: &str,
@@ -250,7 +252,7 @@ impl<W: Write + Seek> ArchiveWriter<W> {
 /// Every write goes straight to the archive's stream and fails once writing to the stream has
 /// failed. [`flush`](Write::flush) does nothing: the archive is complete only after
 /// [`ArchiveWriter::finish`].
-pub struct UserDataWriter<'a, W: Write + Seek> {
+pub struct UserDataWriter<'a, W: Write> {
     output: &'a mut ArchiveOutput<W>,
     sample: StreamedSample,
     completed: bool,
@@ -263,7 +265,7 @@ impl<W: Write + Seek> UserDataWriter<'_, W> {
     }
 }
 
-impl<W: Write + Seek> Drop for UserDataWriter<'_, W> {
+impl<W: Write> Drop for UserDataWriter<'_, W> {
     fn drop(&mut self) {
         if !self.completed {
             self.output.ogawa.poison();

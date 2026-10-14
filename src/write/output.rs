@@ -19,7 +19,7 @@ impl StreamedSample {
     }
 }
 
-pub(crate) struct ArchiveOutput<W: Write + Seek> {
+pub(crate) struct ArchiveOutput<W: Write> {
     pub(crate) ogawa: OgawaWriter<W>,
     pub(crate) metadata_dictionary: MetaDataDictionary,
     pub(crate) default_time_sampling_max_samples: u32,
