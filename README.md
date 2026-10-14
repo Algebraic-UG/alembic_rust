@@ -64,8 +64,8 @@ fn main() -> alembic_rust::Result<()> {
         let mut positions = vec![[0.0f32; 3]; points.positions.len()];
         reader.read_into(&points.positions, &mut positions)?;
 
-        for attribute in &points.attributes {
-            if let AttributeValues::Float1(values) = &attribute.values {
+        for attribute in points.attributes.values() {
+            if let AttributeValues::Float1(values) = attribute {
                 let mut buffer = vec![0.0f32; values.len()];
                 reader.read_into(values, &mut buffer)?;
             }

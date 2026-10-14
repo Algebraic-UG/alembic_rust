@@ -5,4 +5,4 @@ mod points;
 mod tree;
 
 pub use archive::{ArchiveContents, ArchiveReader, ArrayHandle, read_archive};
-pub use points::{AttributeValues, PointAttribute, Points};
+pub use points::{AttributeValues, Points};

@@ -39,7 +39,7 @@ fn long_names_need_wider_header_fields() {
         }
     });
     for name in [&two_byte_name, &four_byte_name] {
-        assert_eq!(&contents.points[name].attributes[0].name, name);
+        assert!(contents.points[name].attributes.contains_key(name));
     }
     let user_data_names: Vec<_> = contents.user_data.keys().collect();
     assert_eq!(user_data_names, [&two_byte_name, &four_byte_name]);
@@ -62,7 +62,11 @@ fn non_ascii_names_and_metadata_survive() {
         contents.metadata.get("_ai_Description"),
         Some("Partikel über Wasser, 粒子")
     );
-    assert_eq!(contents.points["粒子"].attributes[0].name, "température");
+    assert!(
+        contents.points["粒子"]
+            .attributes
+            .contains_key("température")
+    );
 }
 
 #[test]
@@ -85,7 +89,7 @@ fn special_float_values_are_kept_bit_for_bit() {
     );
     let velocities = points.velocities.as_ref().unwrap();
     assert_eq!(bits_of(&values(&mut reader, velocities)), bits_of(&unusual));
-    let AttributeValues::Float3(attribute) = points.attributes[0].values else {
+    let AttributeValues::Float3(attribute) = points.attributes["a"] else {
         panic!("expected a three-float attribute");
     };
     assert_eq!(bits_of(&values(&mut reader, &attribute)), bits_of(&unusual));
@@ -124,7 +128,7 @@ fn point_arrays_reject_buffers_of_the_wrong_length() {
     let points = &contents.points["p"];
     let too_short = reader.read_into(&points.positions, &mut [[0.0; 3]; 2]);
     let too_long = reader.read_into(points.widths.as_ref().unwrap(), &mut [0.0; 4]);
-    let AttributeValues::Float2(uv) = points.attributes[0].values else {
+    let AttributeValues::Float2(uv) = points.attributes["uv"] else {
         panic!("expected a two-float attribute");
     };
     let empty = reader.read_into(&uv, &mut []);

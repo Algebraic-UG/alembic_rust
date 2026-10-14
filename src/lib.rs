@@ -60,8 +60,8 @@
 //!     let mut positions = vec![[0.0f32; 3]; points.positions.len()];
 //!     reader.read_into(&points.positions, &mut positions)?;
 //!
-//!     for attribute in &points.attributes {
-//!         if let AttributeValues::Float1(values) = &attribute.values {
+//!     for attribute in points.attributes.values() {
+//!         if let AttributeValues::Float1(values) = attribute {
 //!             let mut buffer = vec![0.0f32; values.len()];
 //!             reader.read_into(values, &mut buffer)?;
 //!         }
@@ -92,7 +92,6 @@ mod round_trip_tests;
 pub use error::{Error, Result};
 pub use format::metadata::MetaData;
 pub use read::{
-    ArchiveContents, ArchiveReader, ArrayHandle, AttributeValues, PointAttribute, Points,
-    read_archive,
+    ArchiveContents, ArchiveReader, ArrayHandle, AttributeValues, Points, read_archive,
 };
 pub use write::{ArchiveWriter, Attribute, PointsWriter, UserDataWriter};

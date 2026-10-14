@@ -38,9 +38,9 @@ fn main() -> alembic_rust::Result<()> {
         if let Some(widths) = &points.widths {
             print_values(&mut reader, "  widths", widths)?;
         }
-        for attribute in &points.attributes {
-            let label = format!("  attribute {}", attribute.name);
-            match &attribute.values {
+        for (name, attribute) in &points.attributes {
+            let label = format!("  attribute {name}");
+            match attribute {
                 AttributeValues::Float1(values) => print_values(&mut reader, &label, values)?,
                 AttributeValues::Float2(values) => print_values(&mut reader, &label, values)?,
                 AttributeValues::Float3(values) => print_values(&mut reader, &label, values)?,

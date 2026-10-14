@@ -24,20 +24,11 @@ pub struct Points {
     pub velocities: Option<ArrayHandle<[f32; 3]>>,
     /// The `.widths`, if written.
     pub widths: Option<ArrayHandle<f32>>,
-    /// The attributes in `.arbGeomParams`, in file order.
-    pub attributes: Vec<PointAttribute>,
+    /// The attributes in `.arbGeomParams`, by name.
+    pub attributes: BTreeMap<String, AttributeValues>,
 }
 
-/// A per-point attribute of a [`Points`] object.
-#[derive(Debug, Clone)]
-pub struct PointAttribute {
-    /// The attribute's name.
-    pub name: String,
-    /// Where the attribute's values are stored.
-    pub values: AttributeValues,
-}
-
-/// The values of a [`PointAttribute`], by number of components.
+/// Where the values of a per-point attribute are stored, by number of components.
 #[derive(Debug, Clone, Copy)]
 pub enum AttributeValues {
     /// One float per point.
@@ -107,10 +98,10 @@ fn bounds_of<R: Read + Seek>(
     Ok(Some(bounds))
 }
 
-fn attributes_of(geom: &[PropertyNode]) -> Vec<PointAttribute> {
+fn attributes_of(geom: &[PropertyNode]) -> BTreeMap<String, AttributeValues> {
     let Some(PropertyValue::Compound(arb_geom_params)) = find(geom, ARB_GEOM_PARAMS_COMPOUND)
     else {
-        return Vec::new();
+        return BTreeMap::new();
     };
     arb_geom_params
         .iter()
@@ -124,10 +115,7 @@ fn attributes_of(geom: &[PropertyNode]) -> Vec<PointAttribute> {
                 FLOAT3 => AttributeValues::Float3(ArrayHandle::of_first_sample(sample)),
                 _ => return None,
             };
-            Some(PointAttribute {
-                name: property.name.clone(),
-                values,
-            })
+            Some((property.name.clone(), values))
         })
         .collect()
 }
@@ -191,21 +179,17 @@ mod tests {
             widths
         );
 
-        let names: Vec<_> = particles
-            .attributes
-            .iter()
-            .map(|a| a.name.as_str())
-            .collect();
-        assert_eq!(names, ["Cd", "uv", "temperature"]);
-        let AttributeValues::Float3(cd) = particles.attributes[0].values else {
+        let names: Vec<_> = particles.attributes.keys().map(String::as_str).collect();
+        assert_eq!(names, ["Cd", "temperature", "uv"]);
+        let AttributeValues::Float3(cd) = particles.attributes["Cd"] else {
             panic!("Cd is not a three-float attribute");
         };
         assert_eq!(values(&mut reader, &cd), colors);
-        let AttributeValues::Float2(uv) = particles.attributes[1].values else {
+        let AttributeValues::Float2(uv) = particles.attributes["uv"] else {
             panic!("uv is not a two-float attribute");
         };
         assert_eq!(values(&mut reader, &uv), uvs);
-        let AttributeValues::Float1(temperature) = particles.attributes[2].values else {
+        let AttributeValues::Float1(temperature) = particles.attributes["temperature"] else {
             panic!("temperature is not a float");
         };
         assert_eq!(values(&mut reader, &temperature), temperatures);
