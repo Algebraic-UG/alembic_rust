@@ -1,15 +1,16 @@
 use std::collections::BTreeMap;
 use std::io::{Read, Seek};
 
-use crate::error::Result;
+use crate::error::{Error, Result};
+use crate::format::attribute::{AttributeElement, AttributeType};
 use crate::format::data_type::DataType;
 use crate::format::schema::{
-    ARB_GEOM_PARAMS_COMPOUND, BOX3D, FLOAT1, FLOAT2, FLOAT3, GEOM_COMPOUND, POSITIONS, SELF_BOUNDS,
+    ARB_GEOM_PARAMS_COMPOUND, BOX3D, FLOAT1, FLOAT3, GEOM_COMPOUND, POSITIONS, SELF_BOUNDS,
     VELOCITIES, WIDTHS,
 };
 use crate::read::archive::ArrayHandle;
 use crate::read::ogawa::OgawaReader;
-use crate::read::tree::{Properties, PropertyValue};
+use crate::read::tree::{FirstSample, Properties, PropertyValue};
 
 /// A points object read from an archive.
 #[derive(Debug, Clone)]
@@ -25,18 +26,37 @@ pub struct Points {
     /// The `.widths`, if written.
     pub widths: Option<ArrayHandle<f32>>,
     /// The attributes in `.arbGeomParams`, by name.
-    pub attributes: BTreeMap<String, AttributeValues>,
+    pub attributes: BTreeMap<String, AttributeHandle>,
 }
 
-/// Where the values of a per-point attribute are stored, by number of components.
+/// Where the values of a per-point attribute are stored.
 #[derive(Debug, Clone, Copy)]
-pub enum AttributeValues {
-    /// One float per point.
-    Float1(ArrayHandle<f32>),
-    /// Two floats per point.
-    Float2(ArrayHandle<[f32; 2]>),
-    /// Three floats per point.
-    Float3(ArrayHandle<[f32; 3]>),
+pub struct AttributeHandle {
+    attribute_type: AttributeType,
+    sample: FirstSample,
+}
+
+impl AttributeHandle {
+    /// The type of the attribute's values.
+    pub fn attribute_type(self) -> AttributeType {
+        self.attribute_type
+    }
+
+    /// The values as an array of `T`, to read with
+    /// [`ArchiveReader::read_into`](crate::ArchiveReader::read_into).
+    ///
+    /// # Errors
+    ///
+    /// [`Error::AttributeTypeMismatch`] if the attribute holds another type.
+    pub fn typed<T: AttributeElement>(self) -> Result<ArrayHandle<T>> {
+        if T::TYPE != self.attribute_type {
+            return Err(Error::AttributeTypeMismatch {
+                expected: T::TYPE,
+                actual: self.attribute_type,
+            });
+        }
+        Ok(ArrayHandle::of_first_sample(self.sample))
+    }
 }
 
 pub(crate) fn points_among<R: Read + Seek>(
@@ -87,7 +107,7 @@ fn bounds_of<R: Read + Seek>(
     Ok(Some(bounds))
 }
 
-fn attributes_of(geom: &Properties) -> BTreeMap<String, AttributeValues> {
+fn attributes_of(geom: &Properties) -> BTreeMap<String, AttributeHandle> {
     let Some(PropertyValue::Compound(arb_geom_params)) = geom.get(ARB_GEOM_PARAMS_COMPOUND) else {
         return BTreeMap::new();
     };
@@ -97,20 +117,23 @@ fn attributes_of(geom: &Properties) -> BTreeMap<String, AttributeValues> {
             let PropertyValue::Array(sample) = *value else {
                 return None;
             };
-            let values = match sample.data_type {
-                FLOAT1 => AttributeValues::Float1(ArrayHandle::of_first_sample(sample)),
-                FLOAT2 => AttributeValues::Float2(ArrayHandle::of_first_sample(sample)),
-                FLOAT3 => AttributeValues::Float3(ArrayHandle::of_first_sample(sample)),
-                _ => return None,
-            };
-            Some((name.clone(), values))
+            let attribute_type = AttributeType::of_data_type(sample.data_type)?;
+            Some((
+                name.clone(),
+                AttributeHandle {
+                    attribute_type,
+                    sample,
+                },
+            ))
         })
         .collect()
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::read::{ArchiveReader, ArrayHandle, AttributeValues, Points, read_archive};
+    use crate::error::Error;
+    use crate::format::attribute::AttributeType;
+    use crate::read::{ArchiveReader, ArrayHandle, Points, read_archive};
     use crate::write::ArchiveWriter;
     use crate::write::Attribute;
     use std::collections::BTreeMap;
@@ -169,18 +192,54 @@ mod tests {
 
         let names: Vec<_> = particles.attributes.keys().map(String::as_str).collect();
         assert_eq!(names, ["Cd", "temperature", "uv"]);
-        let AttributeValues::Float3(cd) = particles.attributes["Cd"] else {
-            panic!("Cd is not a three-float attribute");
-        };
+        let cd = particles.attributes["Cd"].typed::<[f32; 3]>().unwrap();
         assert_eq!(values(&mut reader, &cd), colors);
-        let AttributeValues::Float2(uv) = particles.attributes["uv"] else {
-            panic!("uv is not a two-float attribute");
-        };
+        let uv = particles.attributes["uv"].typed::<[f32; 2]>().unwrap();
         assert_eq!(values(&mut reader, &uv), uvs);
-        let AttributeValues::Float1(temperature) = particles.attributes["temperature"] else {
-            panic!("temperature is not a float");
-        };
+        let temperature = particles.attributes["temperature"].typed::<f32>().unwrap();
         assert_eq!(values(&mut reader, &temperature), temperatures);
+    }
+
+    #[test]
+    fn attributes_are_typed_only_as_the_type_they_hold() {
+        let (points, _) = read_back(|archive| {
+            let mut p = archive.begin_points("p", &[[0.0; 3]]).unwrap();
+            p.attribute("one", Attribute::Float1(&[1.0])).unwrap();
+            p.attribute("two", Attribute::Float2(&[[1.0, 2.0]]))
+                .unwrap();
+            p.attribute("three", Attribute::Float3(&[[1.0, 2.0, 3.0]]))
+                .unwrap();
+            p.finish().unwrap();
+        });
+        let attributes = &points["p"].attributes;
+        use AttributeType::{Float1, Float2, Float3};
+        assert_eq!(attributes["one"].attribute_type(), Float1);
+        assert_eq!(attributes["two"].attribute_type(), Float2);
+        assert_eq!(attributes["three"].attribute_type(), Float3);
+
+        let mismatches = [
+            (
+                attributes["one"].typed::<[f32; 2]>().unwrap_err(),
+                Float2,
+                Float1,
+            ),
+            (
+                attributes["two"].typed::<f32>().unwrap_err(),
+                Float1,
+                Float2,
+            ),
+            (
+                attributes["three"].typed::<[f32; 2]>().unwrap_err(),
+                Float2,
+                Float3,
+            ),
+        ];
+        for (error, asked, held) in mismatches {
+            assert!(
+                matches!(error, Error::AttributeTypeMismatch { expected, actual } if expected == asked && actual == held),
+                "{error:?}"
+            );
+        }
     }
 
     #[test]

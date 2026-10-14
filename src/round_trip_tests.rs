@@ -1,7 +1,7 @@
 use std::io::{Cursor, Read, Write};
 
 use crate::error::Error;
-use crate::read::{ArchiveContents, ArchiveReader, ArrayHandle, AttributeValues, read_archive};
+use crate::read::{ArchiveContents, ArchiveReader, ArrayHandle, read_archive};
 use crate::write::ArchiveWriter;
 use crate::write::Attribute;
 
@@ -89,9 +89,7 @@ fn special_float_values_are_kept_bit_for_bit() {
     );
     let velocities = points.velocities.as_ref().unwrap();
     assert_eq!(bits_of(&values(&mut reader, velocities)), bits_of(&unusual));
-    let AttributeValues::Float3(attribute) = points.attributes["a"] else {
-        panic!("expected a three-float attribute");
-    };
+    let attribute = points.attributes["a"].typed::<[f32; 3]>().unwrap();
     assert_eq!(bits_of(&values(&mut reader, &attribute)), bits_of(&unusual));
 }
 
@@ -128,9 +126,7 @@ fn point_arrays_reject_buffers_of_the_wrong_length() {
     let points = &contents.points["p"];
     let too_short = reader.read_into(&points.positions, &mut [[0.0; 3]; 2]);
     let too_long = reader.read_into(points.widths.as_ref().unwrap(), &mut [0.0; 4]);
-    let AttributeValues::Float2(uv) = points.attributes["uv"] else {
-        panic!("expected a two-float attribute");
-    };
+    let uv = points.attributes["uv"].typed::<[f32; 2]>().unwrap();
     let empty = reader.read_into(&uv, &mut []);
     for (result, actual) in [(too_short, 2), (too_long, 4), (empty, 0)] {
         assert!(

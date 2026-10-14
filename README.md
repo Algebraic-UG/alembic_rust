@@ -54,7 +54,7 @@ cargo run --example read_summary -- out.abc
 ```rust
 use std::fs::File;
 
-use alembic_rust::{AttributeValues, read_archive};
+use alembic_rust::read_archive;
 
 fn main() -> alembic_rust::Result<()> {
     let (contents, mut reader) = read_archive(File::open("particles.abc")?)?;
@@ -65,9 +65,9 @@ fn main() -> alembic_rust::Result<()> {
         reader.read_into(&points.positions, &mut positions)?;
 
         for attribute in points.attributes.values() {
-            if let AttributeValues::Float1(values) = attribute {
+            if let Ok(values) = attribute.typed::<f32>() {
                 let mut buffer = vec![0.0f32; values.len()];
-                reader.read_into(values, &mut buffer)?;
+                reader.read_into(&values, &mut buffer)?;
             }
         }
     }
