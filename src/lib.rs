@@ -88,4 +88,4 @@ pub use read::{
     ArchiveContents, ArchiveReader, ArrayHandle, AttributeValues, PointAttribute, Points, UserData,
     read_archive,
 };
-pub use write::{ArchiveWriter, Attribute, PointsWriter};
+pub use write::{ArchiveWriter, Attribute, PointsWriter, UserDataWriter};

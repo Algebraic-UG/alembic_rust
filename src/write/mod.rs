@@ -11,5 +11,5 @@ mod points;
 #[cfg(test)]
 mod structure_tests;
 
-pub use archive::ArchiveWriter;
+pub use archive::{ArchiveWriter, UserDataWriter};
 pub use points::{Attribute, PointsWriter};

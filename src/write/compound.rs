@@ -24,6 +24,10 @@ impl CompoundWriter {
         self.property_groups.is_empty()
     }
 
+    pub(crate) fn claim_name(&mut self, name: &str) -> Result<()> {
+        self.names.claim(name)
+    }
+
     pub(crate) fn add_array<W: Write + Seek>(
         &mut self,
         output: &mut ArchiveOutput<W>,
@@ -35,6 +39,18 @@ impl CompoundWriter {
         self.names.claim(name)?;
         let num_points = sample_bytes.len() / data_type.element_byte_width();
         let sample = output.write_sample(sample_bytes)?;
+        self.add_claimed_array(output, name, metadata, data_type, sample, num_points)
+    }
+
+    pub(crate) fn add_claimed_array<W: Write + Seek>(
+        &mut self,
+        output: &mut ArchiveOutput<W>,
+        name: &str,
+        metadata: &MetaData,
+        data_type: DataType,
+        sample: DataRef,
+        num_points: usize,
+    ) -> Result<()> {
         let rank_one_dimensions_are_implied = DataRef::EMPTY;
         let group = output
             .ogawa
