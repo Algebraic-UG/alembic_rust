@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::io::{Read, Seek};
 
 use crate::error::Result;
@@ -7,21 +8,11 @@ use crate::format::ogawa::{Child, GroupRef};
 use crate::read::headers::{PropertyKind, decode_object_names, decode_property_headers};
 use crate::read::ogawa::{DataSpan, OgawaReader};
 
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct ObjectNode {
-    pub(crate) name: String,
-    pub(crate) properties: Vec<PropertyNode>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct PropertyNode {
-    pub(crate) name: String,
-    pub(crate) value: PropertyValue,
-}
+pub(crate) type Properties = BTreeMap<String, PropertyValue>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum PropertyValue {
-    Compound(Vec<PropertyNode>),
+    Compound(Properties),
     Scalar(FirstSample),
     Array(FirstSample),
 }
@@ -34,8 +25,8 @@ pub(crate) struct FirstSample {
 }
 
 pub(crate) struct Hierarchy {
-    pub(crate) top_properties: Vec<PropertyNode>,
-    pub(crate) objects: Vec<ObjectNode>,
+    pub(crate) top_properties: Properties,
+    pub(crate) objects: BTreeMap<String, Properties>,
 }
 
 pub(crate) fn walk_hierarchy<R: Read + Seek>(
@@ -45,14 +36,14 @@ pub(crate) fn walk_hierarchy<R: Read + Seek>(
     let children = ogawa.read_group(top_object)?;
     let top_properties = walk_properties_of(ogawa, &children)?;
     let names = decode_object_names(&read_last_data(ogawa, &children)?);
-    let mut objects = Vec::with_capacity(names.len());
+    let mut objects = BTreeMap::new();
     for (index, name) in names.into_iter().enumerate() {
         let Some(&Child::Group(object)) = children.get(index + 1) else {
             continue;
         };
         let object_children = ogawa.read_group(object)?;
         let properties = walk_properties_of(ogawa, &object_children)?;
-        objects.push(ObjectNode { name, properties });
+        objects.insert(name, properties);
     }
     Ok(Hierarchy {
         top_properties,
@@ -63,20 +54,20 @@ pub(crate) fn walk_hierarchy<R: Read + Seek>(
 fn walk_properties_of<R: Read + Seek>(
     ogawa: &mut OgawaReader<R>,
     object_children: &[Child],
-) -> Result<Vec<PropertyNode>> {
+) -> Result<Properties> {
     match object_children.first() {
         Some(&Child::Group(properties)) => walk_compound(ogawa, properties),
-        _ => Ok(Vec::new()),
+        _ => Ok(Properties::new()),
     }
 }
 
 fn walk_compound<R: Read + Seek>(
     ogawa: &mut OgawaReader<R>,
     group: GroupRef,
-) -> Result<Vec<PropertyNode>> {
+) -> Result<Properties> {
     let children = ogawa.read_group(group)?;
     let headers = decode_property_headers(&read_last_data(ogawa, &children)?);
-    let mut properties = Vec::with_capacity(headers.len());
+    let mut properties = Properties::new();
     for (index, header) in headers.into_iter().enumerate() {
         let Some(&Child::Group(property_group)) = children.get(index) else {
             continue;
@@ -95,10 +86,7 @@ fn walk_compound<R: Read + Seek>(
             PropertyKind::Unsupported => None,
         };
         if let Some(value) = value {
-            properties.push(PropertyNode {
-                name: header.name,
-                value,
-            });
+            properties.insert(header.name, value);
         }
     }
     Ok(properties)

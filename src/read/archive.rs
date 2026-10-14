@@ -131,9 +131,9 @@ pub fn read_archive<R: Read + Seek>(source: R) -> Result<(ArchiveContents, Archi
     let user_data = hierarchy
         .top_properties
         .into_iter()
-        .filter_map(|property| match property.value {
+        .filter_map(|(name, value)| match value {
             PropertyValue::Array(sample) if sample.data_type == USER_DATA_BYTE => {
-                Some((property.name, ArrayHandle::of_first_sample(sample)))
+                Some((name, ArrayHandle::of_first_sample(sample)))
             }
             _ => None,
         })

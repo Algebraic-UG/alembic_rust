@@ -9,7 +9,7 @@ use crate::format::schema::{
 };
 use crate::read::archive::ArrayHandle;
 use crate::read::ogawa::OgawaReader;
-use crate::read::tree::{ObjectNode, PropertyNode, PropertyValue};
+use crate::read::tree::{Properties, PropertyValue};
 
 /// A points object read from an archive.
 #[derive(Debug, Clone)]
@@ -40,12 +40,12 @@ pub enum AttributeValues {
 }
 
 pub(crate) fn points_among<R: Read + Seek>(
-    objects: Vec<ObjectNode>,
+    objects: BTreeMap<String, Properties>,
     ogawa: &mut OgawaReader<R>,
 ) -> Result<BTreeMap<String, Points>> {
     let mut points = BTreeMap::new();
-    for object in objects {
-        let Some(PropertyValue::Compound(geom)) = find(&object.properties, GEOM_COMPOUND) else {
+    for (name, properties) in objects {
+        let Some(PropertyValue::Compound(geom)) = properties.get(GEOM_COMPOUND) else {
             continue;
         };
         let Some(positions) = array_of(geom, POSITIONS, FLOAT3) else {
@@ -58,24 +58,13 @@ pub(crate) fn points_among<R: Read + Seek>(
             widths: array_of(geom, WIDTHS, FLOAT1),
             attributes: attributes_of(geom),
         };
-        points.insert(object.name, object_points);
+        points.insert(name, object_points);
     }
     Ok(points)
 }
 
-fn find<'a>(properties: &'a [PropertyNode], name: &str) -> Option<&'a PropertyValue> {
-    properties
-        .iter()
-        .find(|property| property.name == name)
-        .map(|property| &property.value)
-}
-
-fn array_of<T>(
-    properties: &[PropertyNode],
-    name: &str,
-    data_type: DataType,
-) -> Option<ArrayHandle<T>> {
-    match find(properties, name)? {
+fn array_of<T>(properties: &Properties, name: &str, data_type: DataType) -> Option<ArrayHandle<T>> {
+    match properties.get(name)? {
         PropertyValue::Array(sample) if sample.data_type == data_type => {
             Some(ArrayHandle::of_first_sample(*sample))
         }
@@ -84,10 +73,10 @@ fn array_of<T>(
 }
 
 fn bounds_of<R: Read + Seek>(
-    geom: &[PropertyNode],
+    geom: &Properties,
     ogawa: &mut OgawaReader<R>,
 ) -> Result<Option<[f64; 6]>> {
-    let Some(PropertyValue::Scalar(sample)) = find(geom, SELF_BOUNDS) else {
+    let Some(PropertyValue::Scalar(sample)) = geom.get(SELF_BOUNDS) else {
         return Ok(None);
     };
     if sample.data_type != BOX3D || sample.len == 0 {
@@ -98,15 +87,14 @@ fn bounds_of<R: Read + Seek>(
     Ok(Some(bounds))
 }
 
-fn attributes_of(geom: &[PropertyNode]) -> BTreeMap<String, AttributeValues> {
-    let Some(PropertyValue::Compound(arb_geom_params)) = find(geom, ARB_GEOM_PARAMS_COMPOUND)
-    else {
+fn attributes_of(geom: &Properties) -> BTreeMap<String, AttributeValues> {
+    let Some(PropertyValue::Compound(arb_geom_params)) = geom.get(ARB_GEOM_PARAMS_COMPOUND) else {
         return BTreeMap::new();
     };
     arb_geom_params
         .iter()
-        .filter_map(|property| {
-            let PropertyValue::Array(sample) = property.value else {
+        .filter_map(|(name, value)| {
+            let PropertyValue::Array(sample) = *value else {
                 return None;
             };
             let values = match sample.data_type {
@@ -115,7 +103,7 @@ fn attributes_of(geom: &[PropertyNode]) -> BTreeMap<String, AttributeValues> {
                 FLOAT3 => AttributeValues::Float3(ArrayHandle::of_first_sample(sample)),
                 _ => return None,
             };
-            Some((property.name.clone(), values))
+            Some((name.clone(), values))
         })
         .collect()
 }
