@@ -1,4 +1,4 @@
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom, Take};
 
 use crate::error::{Error, Result};
 use crate::format::ogawa::{
@@ -93,6 +93,11 @@ impl<R: Read + Seek> OgawaReader<R> {
         self.read_at(span.payload_start, destination)
     }
 
+    pub(crate) fn span_reader(&mut self, span: DataSpan) -> Result<Take<&mut R>> {
+        self.source.seek(SeekFrom::Start(span.payload_start))?;
+        Ok((&mut self.source).take(span.len))
+    }
+
     fn record_body(
         &mut self,
         record_start: u64,
@@ -173,6 +178,30 @@ mod tests {
         assert_eq!(reader.data_span(empty_data).unwrap(), DataSpan::EMPTY);
         assert_eq!(reader.read_group(inner).unwrap(), vec![Child::Data(data)]);
         assert!(reader.read_group(empty_group).unwrap().is_empty());
+    }
+
+    #[test]
+    fn span_reader_reads_exactly_the_span() {
+        let (mut reader, root) = open(file_with_one_data_child()).unwrap();
+        let [Child::Data(data)] = reader.read_group(root).unwrap()[..] else {
+            panic!("expected one data child");
+        };
+        let span = reader.data_span(data).unwrap().after_prefix(1);
+        let mut bytes = Vec::new();
+        reader
+            .span_reader(span)
+            .unwrap()
+            .read_to_end(&mut bytes)
+            .unwrap();
+        assert_eq!(bytes, b"bc");
+
+        bytes.clear();
+        reader
+            .span_reader(DataSpan::EMPTY)
+            .unwrap()
+            .read_to_end(&mut bytes)
+            .unwrap();
+        assert!(bytes.is_empty());
     }
 
     #[test]

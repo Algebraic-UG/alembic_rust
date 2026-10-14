@@ -85,6 +85,23 @@ impl<R: Read + Seek> ArchiveReader<R> {
         self.ogawa
             .read_into(handle.values, bytemuck::cast_slice_mut(destination))
     }
+
+    /// Reads the bytes of a blob as a stream, for example into a deserializer or
+    /// [`io::copy`](std::io::copy).
+    ///
+    /// The returned reader yields exactly [`handle.len()`](ArrayHandle::len) bytes. It borrows
+    /// this reader, so it must be dropped before reading anything else; stopping early is fine.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Io`] if seeking to the blob fails. Reading from the returned reader fails only
+    /// if reading the stream fails.
+    pub fn user_data_reader<'a>(
+        &'a mut self,
+        handle: &ArrayHandle<u8>,
+    ) -> Result<impl Read + use<'a, R>> {
+        self.ogawa.span_reader(handle.values)
+    }
 }
 
 /// Reads the structure of an archive written by this library.

@@ -1,4 +1,4 @@
-use std::io::{Cursor, Write};
+use std::io::{Cursor, Read, Write};
 
 use crate::error::Error;
 use crate::read::{ArchiveContents, ArchiveReader, ArrayHandle, AttributeValues, read_archive};
@@ -176,4 +176,54 @@ fn user_data_whose_writer_panicked_is_not_read_back() {
     });
     let names: Vec<_> = contents.user_data.iter().map(|u| u.name.as_str()).collect();
     assert_eq!(names, ["after"]);
+}
+
+#[test]
+fn streamed_user_data_reads_back_as_a_stream() {
+    let blob: Vec<u8> = (0..=255).cycle().take(100_000).collect();
+    let (contents, mut reader) = round_trip(|archive| {
+        archive
+            .user_data_with("blob", |w| {
+                for chunk in blob.chunks(777) {
+                    w.write_all(chunk)?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        archive.user_data("small", &[7, 8, 9]).unwrap();
+    });
+    let [blob_data, small] = &contents.user_data[..] else {
+        panic!("expected two blobs");
+    };
+
+    let mut whole = Vec::new();
+    reader
+        .user_data_reader(&blob_data.bytes)
+        .unwrap()
+        .read_to_end(&mut whole)
+        .unwrap();
+    assert_eq!(whole, blob);
+
+    let mut in_small_reads = Vec::new();
+    {
+        let mut stream = reader.user_data_reader(&blob_data.bytes).unwrap();
+        let mut chunk = [0u8; 100];
+        loop {
+            let read = stream.read(&mut chunk).unwrap();
+            if read == 0 {
+                break;
+            }
+            in_small_reads.extend_from_slice(&chunk[..read]);
+        }
+    }
+    assert_eq!(in_small_reads, blob);
+
+    let mut start = [0u8; 10];
+    reader
+        .user_data_reader(&blob_data.bytes)
+        .unwrap()
+        .read_exact(&mut start)
+        .unwrap();
+    assert_eq!(start, blob[..10]);
+    assert_eq!(values(&mut reader, &small.bytes), [7, 8, 9]);
 }
