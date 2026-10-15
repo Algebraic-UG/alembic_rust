@@ -19,7 +19,7 @@ The reader is meant for the archives this library writes. It skips anything it d
 ## Usage
 
 ```rust
-use alembic_rust::ArchiveWriter;
+use alembic_rust::{ArchiveWriter, POSITIONS, VELOCITIES, WIDTHS};
 
 fn main() -> alembic_rust::Result<()> {
     let positions = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
@@ -27,9 +27,10 @@ fn main() -> alembic_rust::Result<()> {
     let mut archive = ArchiveWriter::create_file("particles.abc")?;
     archive.metadata_mut().set("_ai_Application", "my app")?;
 
-    let mut particles = archive.begin_points("particles", &positions)?;
-    particles.velocities(&[[0.0, 1.0, 0.0]; 3])?;
-    particles.widths(&[0.1, 0.2, 0.3])?;
+    let mut particles = archive.begin_points("particles", positions.len())?;
+    particles.attribute(POSITIONS, &positions)?;
+    particles.attribute(VELOCITIES, &[[0.0, 1.0, 0.0]; 3])?;
+    particles.attribute(WIDTHS, &[0.1, 0.2, 0.3])?;
     particles.attribute("Cd", &[[1.0, 0.0, 0.0]; 3])?;
     particles.attribute("uv", &[[0.0, 0.0]; 3])?;
     particles.attribute("temperature", &[20.0, 21.0, 22.0])?;
@@ -54,15 +55,16 @@ cargo run --example read_summary -- out.abc
 ```rust
 use std::fs::File;
 
-use alembic_rust::read_archive;
+use alembic_rust::{POSITIONS, read_archive};
 
 fn main() -> alembic_rust::Result<()> {
     let (contents, mut reader) = read_archive(File::open("particles.abc")?)?;
     println!("written by {:?}", contents.metadata.get("_ai_Application"));
 
     for points in contents.points.values() {
-        let mut positions = vec![[0.0f32; 3]; points.positions.len()];
-        reader.read_into(&points.positions, &mut positions)?;
+        let positions = points.attributes[POSITIONS].typed::<[f32; 3]>()?;
+        let mut buffer = vec![[0.0f32; 3]; positions.len()];
+        reader.read_into(&positions, &mut buffer)?;
 
         for attribute in points.attributes.values() {
             if let Ok(values) = attribute.typed::<f32>() {

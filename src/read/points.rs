@@ -19,13 +19,9 @@ pub struct Points {
     ///
     /// For an object without points, the minimum is [`f64::MAX`] and the maximum [`f64::MIN`].
     pub bounds: Option<[f64; 6]>,
-    /// The positions `P`.
-    pub positions: ArrayHandle<[f32; 3]>,
-    /// The `.velocities`, if written.
-    pub velocities: Option<ArrayHandle<[f32; 3]>>,
-    /// The `.widths`, if written.
-    pub widths: Option<ArrayHandle<f32>>,
-    /// The attributes in `.arbGeomParams`, by name.
+    /// The attributes by name: [`POSITIONS`](crate::POSITIONS), which is always present,
+    /// [`VELOCITIES`](crate::VELOCITIES) and [`WIDTHS`](crate::WIDTHS) if written, and those in
+    /// `.arbGeomParams`.
     pub attributes: BTreeMap<String, AttributeHandle>,
 }
 
@@ -68,26 +64,35 @@ pub(crate) fn points_among<R: Read + Seek>(
         let Some(PropertyValue::Compound(geom)) = properties.get(GEOM_COMPOUND) else {
             continue;
         };
-        let Some(positions) = array_of(geom, POSITIONS, FLOAT3) else {
+        let Some(positions) = standard_attribute(geom, POSITIONS, FLOAT3) else {
             continue;
         };
+        let mut attributes = attributes_of(geom);
+        attributes.insert(POSITIONS.to_owned(), positions);
+        for (standard, data_type) in [(VELOCITIES, FLOAT3), (WIDTHS, FLOAT1)] {
+            if let Some(attribute) = standard_attribute(geom, standard, data_type) {
+                attributes.insert(standard.to_owned(), attribute);
+            }
+        }
         let object_points = Points {
             bounds: bounds_of(geom, ogawa)?,
-            positions,
-            velocities: array_of(geom, VELOCITIES, FLOAT3),
-            widths: array_of(geom, WIDTHS, FLOAT1),
-            attributes: attributes_of(geom),
+            attributes,
         };
         points.insert(name, object_points);
     }
     Ok(points)
 }
 
-fn array_of<T>(properties: &Properties, name: &str, data_type: DataType) -> Option<ArrayHandle<T>> {
-    match properties.get(name)? {
-        PropertyValue::Array(sample) if sample.data_type == data_type => {
-            Some(ArrayHandle::of_first_sample(*sample))
-        }
+fn standard_attribute(
+    geom: &Properties,
+    name: &str,
+    data_type: DataType,
+) -> Option<AttributeHandle> {
+    match *geom.get(name)? {
+        PropertyValue::Array(sample) if sample.data_type == data_type => Some(AttributeHandle {
+            attribute_type: AttributeType::of_data_type(data_type)?,
+            sample,
+        }),
         _ => None,
     }
 }
@@ -133,6 +138,7 @@ fn attributes_of(geom: &Properties) -> BTreeMap<String, AttributeHandle> {
 mod tests {
     use crate::error::Error;
     use crate::format::attribute::AttributeType;
+    use crate::format::schema::{POSITIONS, VELOCITIES, WIDTHS};
     use crate::read::{ArchiveReader, ArrayHandle, Points, read_archive};
     use crate::write::ArchiveWriter;
     use std::collections::BTreeMap;
@@ -165,9 +171,10 @@ mod tests {
         let uvs = [[0.25, 0.75], [1.0, 0.0]];
         let temperatures = [20.0, 21.5];
         let (points, mut reader) = read_back(|archive| {
-            let mut p = archive.begin_points("particles", &positions).unwrap();
-            p.velocities(&velocities).unwrap();
-            p.widths(&widths).unwrap();
+            let mut p = archive.begin_points("particles", positions.len()).unwrap();
+            p.attribute(POSITIONS, &positions).unwrap();
+            p.attribute(VELOCITIES, &velocities).unwrap();
+            p.attribute(WIDTHS, &widths).unwrap();
             p.attribute("Cd", &colors).unwrap();
             p.attribute("uv", &uvs).unwrap();
             p.attribute("temperature", &temperatures).unwrap();
@@ -178,18 +185,19 @@ mod tests {
         assert_eq!(names, ["particles"]);
         let particles = &points["particles"];
         assert_eq!(particles.bounds, Some([-1.0, -2.0, 0.5, 1.0, 5.0, 3.0]));
-        assert_eq!(values(&mut reader, &particles.positions), positions);
-        assert_eq!(
-            values(&mut reader, particles.velocities.as_ref().unwrap()),
-            velocities
-        );
-        assert_eq!(
-            values(&mut reader, particles.widths.as_ref().unwrap()),
-            widths
-        );
-
         let names: Vec<_> = particles.attributes.keys().map(String::as_str).collect();
-        assert_eq!(names, ["Cd", "temperature", "uv"]);
+        assert_eq!(
+            names,
+            [VELOCITIES, WIDTHS, "Cd", POSITIONS, "temperature", "uv"]
+        );
+        let p = particles.attributes[POSITIONS].typed::<[f32; 3]>().unwrap();
+        assert_eq!(values(&mut reader, &p), positions);
+        let v = particles.attributes[VELOCITIES]
+            .typed::<[f32; 3]>()
+            .unwrap();
+        assert_eq!(values(&mut reader, &v), velocities);
+        let w = particles.attributes[WIDTHS].typed::<f32>().unwrap();
+        assert_eq!(values(&mut reader, &w), widths);
         let cd = particles.attributes["Cd"].typed::<[f32; 3]>().unwrap();
         assert_eq!(values(&mut reader, &cd), colors);
         let uv = particles.attributes["uv"].typed::<[f32; 2]>().unwrap();
@@ -201,7 +209,8 @@ mod tests {
     #[test]
     fn attributes_are_typed_only_as_the_type_they_hold() {
         let (points, _) = read_back(|archive| {
-            let mut p = archive.begin_points("p", &[[0.0; 3]]).unwrap();
+            let mut p = archive.begin_points("p", 1).unwrap();
+            p.attribute(POSITIONS, &[[0.0; 3]]).unwrap();
             p.attribute("one", &[1.0]).unwrap();
             p.attribute("two", &[[1.0, 2.0]]).unwrap();
             p.attribute("three", &[[1.0, 2.0, 3.0]]).unwrap();
@@ -241,31 +250,29 @@ mod tests {
     #[test]
     fn optional_parts_are_absent_when_not_written() {
         let (points, mut reader) = read_back(|archive| {
-            archive
-                .begin_points("positions_only", &[[1.0, 2.0, 3.0]])
-                .unwrap()
-                .finish()
+            let mut positions_only = archive.begin_points("positions_only", 1).unwrap();
+            positions_only
+                .attribute(POSITIONS, &[[1.0, 2.0, 3.0]])
                 .unwrap();
-            archive
-                .begin_points("empty", &[])
-                .unwrap()
-                .finish()
-                .unwrap();
+            positions_only.finish().unwrap();
+            let mut empty = archive.begin_points("empty", 0).unwrap();
+            empty.attribute(POSITIONS, &[] as &[[f32; 3]]).unwrap();
+            empty.finish().unwrap();
         });
         let names: Vec<_> = points.keys().map(String::as_str).collect();
         assert_eq!(names, ["empty", "positions_only"]);
         let positions_only = &points["positions_only"];
         let empty = &points["empty"];
-        assert!(positions_only.velocities.is_none());
-        assert!(positions_only.widths.is_none());
-        assert!(positions_only.attributes.is_empty());
-        assert_eq!(
-            values(&mut reader, &positions_only.positions),
-            [[1.0, 2.0, 3.0]]
-        );
+        let names: Vec<_> = positions_only.attributes.keys().collect();
+        assert_eq!(names, [POSITIONS]);
+        let p = positions_only.attributes[POSITIONS]
+            .typed::<[f32; 3]>()
+            .unwrap();
+        assert_eq!(values(&mut reader, &p), [[1.0, 2.0, 3.0]]);
 
-        assert!(empty.positions.is_empty());
-        reader.read_into(&empty.positions, &mut []).unwrap();
+        let p = empty.attributes[POSITIONS].typed::<[f32; 3]>().unwrap();
+        assert!(p.is_empty());
+        reader.read_into(&p, &mut []).unwrap();
         assert_eq!(
             empty.bounds,
             Some([f64::MAX, f64::MAX, f64::MAX, f64::MIN, f64::MIN, f64::MIN])

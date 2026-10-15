@@ -1,7 +1,7 @@
 use std::env;
 use std::io::Write;
 
-use alembic_rust::ArchiveWriter;
+use alembic_rust::{ArchiveWriter, POSITIONS};
 
 fn main() -> alembic_rust::Result<()> {
     let path = env::args()
@@ -12,9 +12,9 @@ fn main() -> alembic_rust::Result<()> {
         (0..=255u8).try_for_each(|byte| w.write_all(&[byte]))
     })??;
     archive.user_data("empty", &[])?;
-    archive
-        .begin_points("particles", &[[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])?
-        .finish()?;
+    let mut particles = archive.begin_points("particles", 2)?;
+    particles.attribute(POSITIONS, &[[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])?;
+    particles.finish()?;
     archive.finish()?;
     Ok(())
 }

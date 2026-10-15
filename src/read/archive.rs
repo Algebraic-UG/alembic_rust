@@ -153,6 +153,7 @@ pub fn read_archive<R: Read + Seek>(source: R) -> Result<(ArchiveContents, Archi
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::format::schema::POSITIONS;
     use crate::write::ArchiveWriter;
     use crate::write::ogawa::OgawaWriter;
     use std::io::Cursor;
@@ -195,11 +196,9 @@ mod tests {
             archive.user_data("bytes", &every_byte_value).unwrap();
             archive.user_data("empty", &[]).unwrap();
             archive.user_data("one", &[42]).unwrap();
-            archive
-                .begin_points("p", &[[1.0; 3]])
-                .unwrap()
-                .finish()
-                .unwrap();
+            let mut points = archive.begin_points("p", 1).unwrap();
+            points.attribute(POSITIONS, &[[1.0; 3]]).unwrap();
+            points.finish().unwrap();
         });
         let (contents, mut reader) = read(file).unwrap();
         let names: Vec<_> = contents.user_data.keys().map(String::as_str).collect();

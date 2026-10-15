@@ -10,7 +10,7 @@
 //! ```
 //! use std::io::{Cursor, Write};
 //!
-//! use alembic_rust::ArchiveWriter;
+//! use alembic_rust::{ArchiveWriter, POSITIONS, VELOCITIES, WIDTHS};
 //!
 //! # fn main() -> alembic_rust::Result<()> {
 //! let positions = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
@@ -20,9 +20,10 @@
 //! archive.user_data("settings", b"{}")?;
 //! archive.user_data_with("log", |w| writeln!(w, "simulated 100 frames"))??;
 //!
-//! let mut particles = archive.begin_points("particles", &positions)?;
-//! particles.velocities(&[[0.0, 1.0, 0.0]; 3])?;
-//! particles.widths(&[0.1, 0.2, 0.3])?;
+//! let mut particles = archive.begin_points("particles", positions.len())?;
+//! particles.attribute(POSITIONS, &positions)?;
+//! particles.attribute(VELOCITIES, &[[0.0, 1.0, 0.0]; 3])?;
+//! particles.attribute(WIDTHS, &[0.1, 0.2, 0.3])?;
 //! particles.attribute("Cd", &[[1.0, 0.0, 0.0]; 3])?;
 //! particles.attribute("uv", &[[0.0, 0.0]; 3])?;
 //! particles.attribute("temperature", &[20.0, 21.0, 22.0])?;
@@ -44,21 +45,24 @@
 //! ```
 //! use std::io::{Cursor, Read};
 //!
-//! use alembic_rust::{ArchiveWriter, read_archive};
+//! use alembic_rust::{ArchiveWriter, POSITIONS, read_archive};
 //!
 //! # fn main() -> alembic_rust::Result<()> {
 //! # let mut archive = ArchiveWriter::create(Cursor::new(Vec::new()))?;
 //! # archive.metadata_mut().set("_ai_Application", "my app")?;
 //! # archive.user_data("settings", b"{}")?;
 //! # archive.user_data("log", b"simulated 100 frames")?;
-//! # archive.begin_points("particles", &[[1.0, 2.0, 3.0]])?.finish()?;
+//! # let mut particles = archive.begin_points("particles", 1)?;
+//! # particles.attribute(POSITIONS, &[[1.0, 2.0, 3.0]])?;
+//! # particles.finish()?;
 //! # let file = archive.finish()?.into_inner();
 //! let (contents, mut reader) = read_archive(Cursor::new(file))?;
 //! assert_eq!(contents.metadata.get("_ai_Application"), Some("my app"));
 //!
 //! for points in contents.points.values() {
-//!     let mut positions = vec![[0.0f32; 3]; points.positions.len()];
-//!     reader.read_into(&points.positions, &mut positions)?;
+//!     let positions = points.attributes[POSITIONS].typed::<[f32; 3]>()?;
+//!     let mut buffer = vec![[0.0f32; 3]; positions.len()];
+//!     reader.read_into(&positions, &mut buffer)?;
 //!
 //!     for attribute in points.attributes.values() {
 //!         if let Ok(values) = attribute.typed::<f32>() {
@@ -92,6 +96,7 @@ mod round_trip_tests;
 pub use error::{Error, Result};
 pub use format::attribute::{AttributeElement, AttributeType};
 pub use format::metadata::MetaData;
+pub use format::schema::{POSITIONS, VELOCITIES, WIDTHS};
 pub use read::{
     ArchiveContents, ArchiveReader, ArrayHandle, AttributeHandle, Points, read_archive,
 };

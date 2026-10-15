@@ -4,10 +4,11 @@ use crate::error::{Error, Result};
 use crate::format::attribute::AttributeElement;
 use crate::format::data_type::DataType;
 use crate::format::metadata::MetaData;
+use crate::format::ogawa::DataRef;
 use crate::format::schema::{
     ARB_GEOM_PARAMS_COMPOUND, BOX3D, FLOAT1, FLOAT3, GEOM_BASE_SCHEMA, GEOM_COMPOUND,
-    PER_POINT_SCOPE, POINT_ID, POINT_IDS, POINTS_SCHEMA, POSITIONS, SELF_BOUNDS, VELOCITIES,
-    WIDTHS,
+    PER_POINT_SCOPE, POINT_ID, POINT_IDS, POINTS_SCHEMA, POSITIONS, RESERVED_PREFIX, SELF_BOUNDS,
+    VELOCITIES, WIDTHS,
 };
 use crate::write::archive::ArchiveWriter;
 use crate::write::compound::CompoundWriter;
@@ -24,42 +25,127 @@ pub struct PointsWriter<'a, W: Write> {
     name: String,
     num_points: usize,
     geom: CompoundWriter,
+    positions: Option<DataRef>,
+    bounds: [f64; 6],
+    velocities: Option<DataRef>,
+    widths: Option<DataRef>,
     arb_geom_params: CompoundWriter,
     finished: bool,
 }
 
 impl<W: Write + Seek> ArchiveWriter<W> {
-    /// Starts a points object called `name` with the given positions.
+    /// Starts a points object called `name` with `num_points` points.
     ///
-    /// This writes `P`, the bounding box `.selfBnds` computed from the positions, and an empty
-    /// `.pointIds`, as upstream does when no IDs are given. The number of positions is the point
-    /// count that every other per-point property must match.
+    /// Every attribute must then have one value per point, and [`POSITIONS`] must be set before
+    /// [`finish`](PointsWriter::finish).
     ///
     /// # Errors
     ///
     /// [`Error::InvalidName`] or [`Error::DuplicateName`] if `name` is empty, contains `/` or
     /// is already used by another object.
-    pub fn begin_points(
-        &mut self,
-        name: &str,
-        positions: &[[f32; 3]],
-    ) -> Result<PointsWriter<'_, W>> {
+    pub fn begin_points(&mut self, name: &str, num_points: usize) -> Result<PointsWriter<'_, W>> {
         self.claim_child_name(name)?;
-        let mut geom = CompoundWriter::new();
-        let output = self.output();
-        geom.add_array(
+        Ok(PointsWriter {
+            archive: self,
+            name: name.to_owned(),
+            num_points,
+            geom: CompoundWriter::new(),
+            positions: None,
+            bounds: bounds_of(&[]),
+            velocities: None,
+            widths: None,
+            arb_geom_params: CompoundWriter::new(),
+            finished: false,
+        })
+    }
+}
+
+impl<W: Write + Seek> PointsWriter<'_, W> {
+    /// Writes a per-point attribute called `name`, one element of `values` per point. The
+    /// element type decides the attribute's type, see [`AttributeElement`].
+    ///
+    /// Three names are the standard properties of a points object, with a fixed type:
+    /// [`POSITIONS`] (`[f32; 3]`, required), [`VELOCITIES`] (`[f32; 3]`) and [`WIDTHS`]
+    /// (`f32`). The bounding box `.selfBnds` is computed from the positions. Every other name
+    /// is stored in `.arbGeomParams`.
+    ///
+    /// Attributes are written without `interpretation` metadata, so readers see them as plain
+    /// float arrays. Blender, for example, imports a 3-float `Cd` as a vector rather than a
+    /// colour, and converts it from Y-up to Z-up.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::PointCountMismatch`] if there is not one value per point, and
+    /// [`Error::AttributeTypeMismatch`] if a standard property gets the wrong type; nothing is
+    /// written and the points writer stays usable. [`Error::InvalidName`] if `name` is empty,
+    /// contains `/` or starts with `.` without being a standard property, and
+    /// [`Error::DuplicateName`] if it is already used by another attribute.
+    pub fn attribute<T: AttributeElement>(&mut self, name: &str, values: &[T]) -> Result<()> {
+        self.check_point_count(name, values.len())?;
+        match name {
+            POSITIONS => {
+                let positions = standard_values::<T, [f32; 3]>(values)?;
+                self.positions = Some(self.write_standard(POSITIONS, values)?);
+                self.bounds = bounds_of(positions);
+            }
+            VELOCITIES => {
+                standard_values::<T, [f32; 3]>(values)?;
+                self.velocities = Some(self.write_standard(VELOCITIES, values)?);
+            }
+            WIDTHS => {
+                standard_values::<T, f32>(values)?;
+                self.widths = Some(self.write_standard(WIDTHS, values)?);
+            }
+            _ if name.starts_with(RESERVED_PREFIX) => {
+                return Err(Error::InvalidName {
+                    name: name.to_owned(),
+                });
+            }
+            _ => {
+                let data_type = T::TYPE.data_type();
+                self.arb_geom_params.add_array(
+                    self.archive.output(),
+                    name,
+                    &per_point_geom_param_metadata(data_type),
+                    data_type,
+                    bytemuck::cast_slice(values),
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Adds the points object to the archive.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::MissingPositions`] if [`POSITIONS`] was not set. The object is then left
+    /// unfinished, so [`ArchiveWriter::finish`] fails with [`Error::Unfinished`].
+    pub fn finish(mut self) -> Result<()> {
+        let Some(positions) = self.positions else {
+            return Err(Error::MissingPositions {
+                name: self.name.clone(),
+            });
+        };
+        self.finished = true;
+        let mut geom = std::mem::take(&mut self.geom);
+        let arb_geom_params = std::mem::take(&mut self.arb_geom_params);
+        let num_points = self.num_points;
+        let output = self.archive.output();
+        geom.add_claimed_array(
             output,
             POSITIONS,
             &metadata(&[("geoScope", PER_POINT_SCOPE), ("interpretation", "point")]),
             FLOAT3,
-            bytemuck::cast_slice(positions),
+            positions,
+            num_points,
         )?;
         geom.add_scalar(
             output,
             SELF_BOUNDS,
             &metadata(&[("interpretation", "box")]),
             BOX3D,
-            bytemuck::cast_slice(&bounds_of(positions)),
+            bytemuck::cast_slice(&self.bounds),
         )?;
         geom.add_array(
             output,
@@ -68,82 +154,26 @@ impl<W: Write + Seek> ArchiveWriter<W> {
             POINT_ID,
             &[],
         )?;
-        Ok(PointsWriter {
-            archive: self,
-            name: name.to_owned(),
-            num_points: positions.len(),
-            geom,
-            arb_geom_params: CompoundWriter::new(),
-            finished: false,
-        })
-    }
-}
-
-impl<W: Write + Seek> PointsWriter<'_, W> {
-    /// Writes the velocities, as the standard `.velocities` property.
-    ///
-    /// # Errors
-    ///
-    /// [`Error::PointCountMismatch`] if there is not one velocity per point, and
-    /// [`Error::DuplicateName`] if velocities were already written.
-    pub fn velocities(&mut self, velocities: &[[f32; 3]]) -> Result<()> {
-        self.check_point_count("velocities", VELOCITIES, velocities.len())?;
-        self.geom.add_array(
-            self.archive.output(),
-            VELOCITIES,
-            &metadata(&[("interpretation", "vector")]),
-            FLOAT3,
-            bytemuck::cast_slice(velocities),
-        )
-    }
-
-    /// Writes the widths, as the standard `.widths` property.
-    ///
-    /// # Errors
-    ///
-    /// [`Error::PointCountMismatch`] if there is not one width per point, and
-    /// [`Error::DuplicateName`] if widths were already written.
-    pub fn widths(&mut self, widths: &[f32]) -> Result<()> {
-        self.check_point_count("widths", WIDTHS, widths.len())?;
-        self.geom.add_array(
-            self.archive.output(),
-            WIDTHS,
-            &per_point_geom_param_metadata(FLOAT1),
-            FLOAT1,
-            bytemuck::cast_slice(widths),
-        )
-    }
-
-    /// Writes a per-point attribute called `name` into `.arbGeomParams`, one element of `values`
-    /// per point. The element type decides the attribute's type, see [`AttributeElement`].
-    ///
-    /// Attributes are written without `interpretation` metadata, so readers see them as plain
-    /// float arrays. Blender, for example, imports a 3-float `Cd` as a vector rather than a
-    /// colour, and converts it from Y-up to Z-up.
-    ///
-    /// # Errors
-    ///
-    /// [`Error::PointCountMismatch`] if there is not one value per point; nothing is written and
-    /// the points writer stays usable. [`Error::InvalidName`] or [`Error::DuplicateName`] if
-    /// `name` is empty, contains `/` or is already used by another attribute.
-    pub fn attribute<T: AttributeElement>(&mut self, name: &str, values: &[T]) -> Result<()> {
-        self.check_point_count("attribute", name, values.len())?;
-        let data_type = T::TYPE.data_type();
-        self.arb_geom_params.add_array(
-            self.archive.output(),
-            name,
-            &per_point_geom_param_metadata(data_type),
-            data_type,
-            bytemuck::cast_slice(values),
-        )
-    }
-
-    /// Adds the points object to the archive.
-    pub fn finish(mut self) -> Result<()> {
-        self.finished = true;
-        let mut geom = std::mem::take(&mut self.geom);
-        let arb_geom_params = std::mem::take(&mut self.arb_geom_params);
-        let output = self.archive.output();
+        if let Some(velocities) = self.velocities {
+            geom.add_claimed_array(
+                output,
+                VELOCITIES,
+                &metadata(&[("interpretation", "vector")]),
+                FLOAT3,
+                velocities,
+                num_points,
+            )?;
+        }
+        if let Some(widths) = self.widths {
+            geom.add_claimed_array(
+                output,
+                WIDTHS,
+                &per_point_geom_param_metadata(FLOAT1),
+                FLOAT1,
+                widths,
+                num_points,
+            )?;
+        }
         if !arb_geom_params.is_empty() {
             geom.add_compound(
                 output,
@@ -158,10 +188,16 @@ impl<W: Write + Seek> PointsWriter<'_, W> {
             .add_claimed_child_object(&self.name, &points_object_metadata(), properties)
     }
 
-    fn check_point_count(&self, what: &'static str, name: &str, actual: usize) -> Result<()> {
+    fn write_standard<T: AttributeElement>(&mut self, name: &str, values: &[T]) -> Result<DataRef> {
+        self.geom.claim_name(name)?;
+        self.archive
+            .output()
+            .write_sample(bytemuck::cast_slice(values))
+    }
+
+    fn check_point_count(&self, name: &str, actual: usize) -> Result<()> {
         if actual != self.num_points {
             return Err(Error::PointCountMismatch {
-                what,
                 name: name.to_owned(),
                 expected: self.num_points,
                 actual,
@@ -169,6 +205,16 @@ impl<W: Write + Seek> PointsWriter<'_, W> {
         }
         Ok(())
     }
+}
+
+fn standard_values<T: AttributeElement, U: AttributeElement>(values: &[T]) -> Result<&[U]> {
+    if T::TYPE != U::TYPE {
+        return Err(Error::AttributeTypeMismatch {
+            expected: U::TYPE,
+            actual: T::TYPE,
+        });
+    }
+    Ok(bytemuck::cast_slice(values))
 }
 
 impl<W: Write> Drop for PointsWriter<'_, W> {
@@ -241,6 +287,34 @@ mod tests {
         ArchiveWriter::create(Cursor::new(Vec::new())).unwrap()
     }
 
+    fn position_of(file: &[u8], name: &str) -> usize {
+        file.windows(name.len())
+            .position(|w| w == name.as_bytes())
+            .unwrap()
+    }
+
+    #[test]
+    fn standard_properties_keep_their_order_whatever_the_call_order() {
+        let mut archive = new_archive();
+        let mut points = archive.begin_points("p", 1).unwrap();
+        points.attribute("Cd", &[[1.0, 0.0, 0.0]]).unwrap();
+        points.attribute(WIDTHS, &[0.5]).unwrap();
+        points.attribute(VELOCITIES, &[[1.0, 0.0, 0.0]]).unwrap();
+        points.attribute(POSITIONS, &[[0.0, 1.0, 2.0]]).unwrap();
+        points.finish().unwrap();
+        let file = archive.finish().unwrap().into_inner();
+        let header_order: Vec<_> = [
+            ".selfBnds",
+            ".pointIds",
+            ".velocities",
+            ".widths",
+            ".arbGeomParams",
+        ]
+        .map(|name| position_of(&file, name))
+        .into();
+        assert!(header_order.is_sorted(), "{header_order:?}");
+    }
+
     #[test]
     fn bounds_cover_all_positions() {
         let positions = [[1.0, -2.0, 3.0], [-1.0, 5.0, 0.5]];
@@ -264,7 +338,7 @@ mod tests {
     #[test]
     fn rejects_attributes_with_wrong_point_count() {
         let mut archive = new_archive();
-        let mut points = archive.begin_points("p", &[[0.0; 3]; 2]).unwrap();
+        let mut points = archive.begin_points("p", 2).unwrap();
         let mismatch = points.attribute("t", &[1.0]);
         assert!(matches!(
             mismatch,
@@ -274,25 +348,76 @@ mod tests {
                 ..
             })
         ));
-        assert!(points.velocities(&[[0.0; 3]; 3]).is_err());
-        assert!(points.widths(&[]).is_err());
+        assert!(points.attribute(POSITIONS, &[[0.0; 3]; 3]).is_err());
+        assert!(points.attribute(WIDTHS, &[] as &[f32]).is_err());
+        points.attribute(POSITIONS, &[[0.0; 3]; 2]).unwrap();
         points.attribute("t", &[1.0, 2.0]).unwrap();
         points.finish().unwrap();
         archive.finish().unwrap();
     }
 
     #[test]
+    fn standard_properties_have_fixed_types() {
+        let mut archive = new_archive();
+        let mut points = archive.begin_points("p", 1).unwrap();
+        assert!(matches!(
+            points.attribute(POSITIONS, &[1.0]),
+            Err(Error::AttributeTypeMismatch { .. })
+        ));
+        assert!(matches!(
+            points.attribute(VELOCITIES, &[[1.0, 2.0]]),
+            Err(Error::AttributeTypeMismatch { .. })
+        ));
+        assert!(matches!(
+            points.attribute(WIDTHS, &[[1.0, 2.0, 3.0]]),
+            Err(Error::AttributeTypeMismatch { .. })
+        ));
+        points.attribute(POSITIONS, &[[0.0; 3]]).unwrap();
+        points.finish().unwrap();
+        archive.finish().unwrap();
+    }
+
+    #[test]
+    fn rejects_other_names_starting_with_a_dot() {
+        let mut archive = new_archive();
+        let mut points = archive.begin_points("p", 1).unwrap();
+        assert!(matches!(
+            points.attribute(".selfBnds", &[[0.0; 3]]),
+            Err(Error::InvalidName { .. })
+        ));
+        assert!(matches!(
+            points.attribute(".custom", &[1.0]),
+            Err(Error::InvalidName { .. })
+        ));
+    }
+
+    #[test]
+    fn finishing_without_positions_fails_the_archive() {
+        let mut archive = new_archive();
+        let mut points = archive.begin_points("p", 1).unwrap();
+        points.attribute("t", &[1.0]).unwrap();
+        assert!(matches!(
+            points.finish(),
+            Err(Error::MissingPositions { name }) if name == "p"
+        ));
+        assert!(matches!(archive.finish(), Err(Error::Unfinished { .. })));
+    }
+
+    #[test]
     fn rejects_duplicate_names() {
         let mut archive = new_archive();
-        archive.begin_points("p", &[]).unwrap().finish().unwrap();
+        let mut p = archive.begin_points("p", 0).unwrap();
+        p.attribute(POSITIONS, &[] as &[[f32; 3]]).unwrap();
+        p.finish().unwrap();
         assert!(matches!(
-            archive.begin_points("p", &[]),
+            archive.begin_points("p", 0),
             Err(Error::DuplicateName { .. })
         ));
-        let mut points = archive.begin_points("q", &[]).unwrap();
-        points.widths(&[]).unwrap();
+        let mut points = archive.begin_points("q", 0).unwrap();
+        points.attribute(POSITIONS, &[] as &[[f32; 3]]).unwrap();
+        points.attribute(WIDTHS, &[] as &[f32]).unwrap();
         assert!(matches!(
-            points.widths(&[]),
+            points.attribute(WIDTHS, &[] as &[f32]),
             Err(Error::DuplicateName { .. })
         ));
         points.attribute("a", &[] as &[f32]).unwrap();
@@ -303,7 +428,7 @@ mod tests {
     #[test]
     fn dropping_unfinished_points_fails_the_archive() {
         let mut archive = new_archive();
-        drop(archive.begin_points("lost", &[[0.0; 3]]).unwrap());
+        drop(archive.begin_points("lost", 1).unwrap());
         assert!(matches!(
             archive.finish(),
             Err(Error::Unfinished { name }) if name == "lost"
@@ -314,11 +439,9 @@ mod tests {
     fn positions_are_written_verbatim() {
         let positions = [[1.5f32, -2.25, 3.0], [4.0, 5.0, 6.0]];
         let mut archive = new_archive();
-        archive
-            .begin_points("p", &positions)
-            .unwrap()
-            .finish()
-            .unwrap();
+        let mut points = archive.begin_points("p", positions.len()).unwrap();
+        points.attribute(POSITIONS, &positions).unwrap();
+        points.finish().unwrap();
         let file = archive.finish().unwrap().into_inner();
         let position_bytes: &[u8] = bytemuck::cast_slice(&positions);
         assert!(

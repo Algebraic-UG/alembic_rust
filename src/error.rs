@@ -25,8 +25,9 @@ pub enum Error {
         text: String,
     },
 
-    /// A name is empty or contains `/`.
-    #[error("name {name:?} is empty or contains '/'")]
+    /// A name is empty or contains `/`, or an attribute name starts with `.` without being a
+    /// standard property.
+    #[error("name {name:?} is empty, contains '/' or is reserved")]
     InvalidName {
         /// The invalid name.
         name: String,
@@ -47,18 +48,23 @@ pub enum Error {
         what: &'static str,
     },
 
-    /// Velocities, widths or an attribute do not have one value per point. Nothing was
-    /// written, and the points writer is still usable.
-    #[error("{what} {name:?} has {actual} values but the points object has {expected} points")]
+    /// An attribute does not have one value per point. Nothing was written, and the points
+    /// writer is still usable.
+    #[error("attribute {name:?} has {actual} values but the points object has {expected} points")]
     PointCountMismatch {
-        /// Whether velocities, widths or an attribute were rejected.
-        what: &'static str,
-        /// The name of the rejected property.
+        /// The name of the rejected attribute.
         name: String,
         /// The number of points.
         expected: usize,
         /// The number of values given.
         actual: usize,
+    },
+
+    /// A points object was finished without [`POSITIONS`](crate::POSITIONS).
+    #[error("points object {name:?} has no positions")]
+    MissingPositions {
+        /// The name of the points object.
+        name: String,
     },
 
     /// A [`PointsWriter`](crate::PointsWriter) was dropped without being finished, so the
