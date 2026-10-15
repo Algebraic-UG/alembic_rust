@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::fs::File;
 use std::io::{Read, Seek};
 
-use alembic_rust::{ArchiveReader, ArrayHandle, AttributeType, read_archive};
+use alembic_rust::{ArchiveReader, ArrayHandle, AttributeType, POSITIONS, read_archive};
 
 fn main() -> alembic_rust::Result<()> {
     let path = env::args()
@@ -27,16 +27,10 @@ fn main() -> alembic_rust::Result<()> {
         println!("user data {name}: {bytes:?}");
     }
     for (name, points) in &contents.points {
-        println!("points {name}: {} points", points.positions.len());
+        let positions = points.attributes[POSITIONS].typed::<[f32; 3]>()?;
+        println!("points {name}: {} points", positions.len());
         if let Some(bounds) = points.bounds {
             println!("  bounds: {bounds:?}");
-        }
-        print_values(&mut reader, "  positions", &points.positions)?;
-        if let Some(velocities) = &points.velocities {
-            print_values(&mut reader, "  velocities", velocities)?;
-        }
-        if let Some(widths) = &points.widths {
-            print_values(&mut reader, "  widths", widths)?;
         }
         for (name, attribute) in &points.attributes {
             let label = format!("  attribute {name}");

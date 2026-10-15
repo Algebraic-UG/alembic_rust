@@ -45,7 +45,7 @@
 //! ```
 //! use std::io::{Cursor, Read};
 //!
-//! use alembic_rust::{ArchiveWriter, read_archive};
+//! use alembic_rust::{ArchiveWriter, POSITIONS, read_archive};
 //!
 //! # fn main() -> alembic_rust::Result<()> {
 //! # let mut archive = ArchiveWriter::create(Cursor::new(Vec::new()))?;
@@ -53,15 +53,16 @@
 //! # archive.user_data("settings", b"{}")?;
 //! # archive.user_data("log", b"simulated 100 frames")?;
 //! # let mut particles = archive.begin_points("particles", 1)?;
-//! # particles.attribute(alembic_rust::POSITIONS, &[[1.0, 2.0, 3.0]])?;
+//! # particles.attribute(POSITIONS, &[[1.0, 2.0, 3.0]])?;
 //! # particles.finish()?;
 //! # let file = archive.finish()?.into_inner();
 //! let (contents, mut reader) = read_archive(Cursor::new(file))?;
 //! assert_eq!(contents.metadata.get("_ai_Application"), Some("my app"));
 //!
 //! for points in contents.points.values() {
-//!     let mut positions = vec![[0.0f32; 3]; points.positions.len()];
-//!     reader.read_into(&points.positions, &mut positions)?;
+//!     let positions = points.attributes[POSITIONS].typed::<[f32; 3]>()?;
+//!     let mut buffer = vec![[0.0f32; 3]; positions.len()];
+//!     reader.read_into(&positions, &mut buffer)?;
 //!
 //!     for attribute in points.attributes.values() {
 //!         if let Ok(values) = attribute.typed::<f32>() {
