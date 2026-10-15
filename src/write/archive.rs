@@ -304,6 +304,7 @@ fn encode_time_samplings(default_time_sampling_max_samples: u32) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::format::schema::POSITIONS;
     use std::io::Cursor;
 
     fn new_archive() -> ArchiveWriter<Cursor<Vec<u8>>> {
@@ -443,7 +444,9 @@ mod tests {
             archive.user_data("blob", &[2]),
             Err(Error::DuplicateName { .. })
         ));
-        archive.begin_points("blob", &[]).unwrap().finish().unwrap();
+        let mut points = archive.begin_points("blob", 0).unwrap();
+        points.attribute(POSITIONS, &[] as &[[f32; 3]]).unwrap();
+        points.finish().unwrap();
         archive.finish().unwrap();
     }
 }

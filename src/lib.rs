@@ -10,7 +10,7 @@
 //! ```
 //! use std::io::{Cursor, Write};
 //!
-//! use alembic_rust::ArchiveWriter;
+//! use alembic_rust::{ArchiveWriter, POSITIONS, VELOCITIES, WIDTHS};
 //!
 //! # fn main() -> alembic_rust::Result<()> {
 //! let positions = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
@@ -20,9 +20,10 @@
 //! archive.user_data("settings", b"{}")?;
 //! archive.user_data_with("log", |w| writeln!(w, "simulated 100 frames"))??;
 //!
-//! let mut particles = archive.begin_points("particles", &positions)?;
-//! particles.velocities(&[[0.0, 1.0, 0.0]; 3])?;
-//! particles.widths(&[0.1, 0.2, 0.3])?;
+//! let mut particles = archive.begin_points("particles", positions.len())?;
+//! particles.attribute(POSITIONS, &positions)?;
+//! particles.attribute(VELOCITIES, &[[0.0, 1.0, 0.0]; 3])?;
+//! particles.attribute(WIDTHS, &[0.1, 0.2, 0.3])?;
 //! particles.attribute("Cd", &[[1.0, 0.0, 0.0]; 3])?;
 //! particles.attribute("uv", &[[0.0, 0.0]; 3])?;
 //! particles.attribute("temperature", &[20.0, 21.0, 22.0])?;
@@ -51,7 +52,9 @@
 //! # archive.metadata_mut().set("_ai_Application", "my app")?;
 //! # archive.user_data("settings", b"{}")?;
 //! # archive.user_data("log", b"simulated 100 frames")?;
-//! # archive.begin_points("particles", &[[1.0, 2.0, 3.0]])?.finish()?;
+//! # let mut particles = archive.begin_points("particles", 1)?;
+//! # particles.attribute(alembic_rust::POSITIONS, &[[1.0, 2.0, 3.0]])?;
+//! # particles.finish()?;
 //! # let file = archive.finish()?.into_inner();
 //! let (contents, mut reader) = read_archive(Cursor::new(file))?;
 //! assert_eq!(contents.metadata.get("_ai_Application"), Some("my app"));
@@ -92,6 +95,7 @@ mod round_trip_tests;
 pub use error::{Error, Result};
 pub use format::attribute::{AttributeElement, AttributeType};
 pub use format::metadata::MetaData;
+pub use format::schema::{POSITIONS, VELOCITIES, WIDTHS};
 pub use read::{
     ArchiveContents, ArchiveReader, ArrayHandle, AttributeHandle, Points, read_archive,
 };

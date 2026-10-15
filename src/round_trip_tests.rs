@@ -1,6 +1,7 @@
 use std::io::{Cursor, Read, Write};
 
 use crate::error::Error;
+use crate::format::schema::{POSITIONS, VELOCITIES, WIDTHS};
 use crate::read::{ArchiveContents, ArchiveReader, ArrayHandle, read_archive};
 use crate::write::ArchiveWriter;
 
@@ -31,7 +32,8 @@ fn long_names_need_wider_header_fields() {
     let four_byte_name = "b".repeat(70_000);
     let (contents, _) = round_trip(|archive| {
         for name in [&two_byte_name, &four_byte_name] {
-            let mut points = archive.begin_points(name, &[[0.0; 3]]).unwrap();
+            let mut points = archive.begin_points(name, 1).unwrap();
+            points.attribute(POSITIONS, &[[0.0; 3]]).unwrap();
             points.attribute(name, &[1.0]).unwrap();
             points.finish().unwrap();
             archive.user_data(name, &[1]).unwrap();
@@ -51,7 +53,8 @@ fn non_ascii_names_and_metadata_survive() {
             .metadata_mut()
             .set("_ai_Description", "Partikel über Wasser, 粒子")
             .unwrap();
-        let mut points = archive.begin_points("粒子", &[[0.0; 3]]).unwrap();
+        let mut points = archive.begin_points("粒子", 1).unwrap();
+        points.attribute(POSITIONS, &[[0.0; 3]]).unwrap();
         points.attribute("température", &[1.0]).unwrap();
         points.finish().unwrap();
     });
@@ -74,8 +77,9 @@ fn special_float_values_are_kept_bit_for_bit() {
         [f32::from_bits(0x7fc0_1234), f32::MIN, 1.0],
     ];
     let (contents, mut reader) = round_trip(|archive| {
-        let mut points = archive.begin_points("p", &unusual).unwrap();
-        points.velocities(&unusual).unwrap();
+        let mut points = archive.begin_points("p", unusual.len()).unwrap();
+        points.attribute(POSITIONS, &unusual).unwrap();
+        points.attribute(VELOCITIES, &unusual).unwrap();
         points.attribute("a", &unusual).unwrap();
         points.finish().unwrap();
     });
@@ -97,8 +101,9 @@ fn many_points_round_trip() {
         .collect();
     let widths: Vec<f32> = (0..100_000).map(|i| i as f32 * 0.5).collect();
     let (contents, mut reader) = round_trip(|archive| {
-        let mut points = archive.begin_points("p", &positions).unwrap();
-        points.widths(&widths).unwrap();
+        let mut points = archive.begin_points("p", positions.len()).unwrap();
+        points.attribute(POSITIONS, &positions).unwrap();
+        points.attribute(WIDTHS, &widths).unwrap();
         points.finish().unwrap();
     });
     let points = &contents.points["p"];
@@ -113,8 +118,9 @@ fn many_points_round_trip() {
 #[test]
 fn point_arrays_reject_buffers_of_the_wrong_length() {
     let (contents, mut reader) = round_trip(|archive| {
-        let mut points = archive.begin_points("p", &[[0.0; 3]; 3]).unwrap();
-        points.widths(&[1.0; 3]).unwrap();
+        let mut points = archive.begin_points("p", 3).unwrap();
+        points.attribute(POSITIONS, &[[0.0; 3]; 3]).unwrap();
+        points.attribute(WIDTHS, &[1.0; 3]).unwrap();
         points.attribute("uv", &[[0.0; 2]; 3]).unwrap();
         points.finish().unwrap();
     });

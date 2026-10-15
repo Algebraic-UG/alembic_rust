@@ -133,6 +133,7 @@ fn attributes_of(geom: &Properties) -> BTreeMap<String, AttributeHandle> {
 mod tests {
     use crate::error::Error;
     use crate::format::attribute::AttributeType;
+    use crate::format::schema::{POSITIONS, VELOCITIES, WIDTHS};
     use crate::read::{ArchiveReader, ArrayHandle, Points, read_archive};
     use crate::write::ArchiveWriter;
     use std::collections::BTreeMap;
@@ -165,9 +166,10 @@ mod tests {
         let uvs = [[0.25, 0.75], [1.0, 0.0]];
         let temperatures = [20.0, 21.5];
         let (points, mut reader) = read_back(|archive| {
-            let mut p = archive.begin_points("particles", &positions).unwrap();
-            p.velocities(&velocities).unwrap();
-            p.widths(&widths).unwrap();
+            let mut p = archive.begin_points("particles", positions.len()).unwrap();
+            p.attribute(POSITIONS, &positions).unwrap();
+            p.attribute(VELOCITIES, &velocities).unwrap();
+            p.attribute(WIDTHS, &widths).unwrap();
             p.attribute("Cd", &colors).unwrap();
             p.attribute("uv", &uvs).unwrap();
             p.attribute("temperature", &temperatures).unwrap();
@@ -201,7 +203,8 @@ mod tests {
     #[test]
     fn attributes_are_typed_only_as_the_type_they_hold() {
         let (points, _) = read_back(|archive| {
-            let mut p = archive.begin_points("p", &[[0.0; 3]]).unwrap();
+            let mut p = archive.begin_points("p", 1).unwrap();
+            p.attribute(POSITIONS, &[[0.0; 3]]).unwrap();
             p.attribute("one", &[1.0]).unwrap();
             p.attribute("two", &[[1.0, 2.0]]).unwrap();
             p.attribute("three", &[[1.0, 2.0, 3.0]]).unwrap();
@@ -241,16 +244,14 @@ mod tests {
     #[test]
     fn optional_parts_are_absent_when_not_written() {
         let (points, mut reader) = read_back(|archive| {
-            archive
-                .begin_points("positions_only", &[[1.0, 2.0, 3.0]])
-                .unwrap()
-                .finish()
+            let mut positions_only = archive.begin_points("positions_only", 1).unwrap();
+            positions_only
+                .attribute(POSITIONS, &[[1.0, 2.0, 3.0]])
                 .unwrap();
-            archive
-                .begin_points("empty", &[])
-                .unwrap()
-                .finish()
-                .unwrap();
+            positions_only.finish().unwrap();
+            let mut empty = archive.begin_points("empty", 0).unwrap();
+            empty.attribute(POSITIONS, &[] as &[[f32; 3]]).unwrap();
+            empty.finish().unwrap();
         });
         let names: Vec<_> = points.keys().map(String::as_str).collect();
         assert_eq!(names, ["empty", "positions_only"]);
