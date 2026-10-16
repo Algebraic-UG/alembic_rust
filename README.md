@@ -68,8 +68,7 @@ fn main() -> alembic_rust::Result<()> {
 
         for attribute in points.attributes.values() {
             if let Ok(values) = attribute.typed::<f32>() {
-                let mut buffer = vec![0.0f32; values.len()];
-                reader.read_into(&values, &mut buffer)?;
+                println!("{:?}", reader.read_to_vec(&values)?);
             }
         }
     }
@@ -81,7 +80,7 @@ fn main() -> alembic_rust::Result<()> {
 }
 ```
 
-`read_archive` accepts any `Read + Seek` stream. It reads only the archive's structure: names, metadata, bounds, and where each array is stored. Array values are read only when you call `read_into`, straight into a buffer you provide, or `user_data_reader`, which streams a blob's bytes. The reader never allocates memory for bulk data.
+`read_archive` accepts any `Read + Seek` stream. It reads only the archive's structure: names, metadata, bounds, and where each array is stored. Array values are read only when you call `read_into`, straight into a buffer you provide, `read_to_vec`, which returns them in a new vector, or `user_data_reader`, which streams a blob's bytes. Apart from `read_to_vec`, the reader never allocates memory for bulk data.
 
 The API documentation, including every error, is in the rustdoc: `cargo doc --open`.
 
