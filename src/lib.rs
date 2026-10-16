@@ -39,7 +39,8 @@
 //! # Reading
 //!
 //! [`read_archive`] reads only the archive's structure. Array values are read on demand with
-//! [`ArchiveReader::read_into`], straight into buffers the caller provides, or as a stream with
+//! [`ArchiveReader::read_into`], straight into buffers the caller provides, with
+//! [`ArchiveReader::read_to_vec`] into a new vector, or as a stream with
 //! [`ArchiveReader::user_data_reader`].
 //!
 //! ```
@@ -66,8 +67,7 @@
 //!
 //!     for attribute in points.attributes.values() {
 //!         if let Ok(values) = attribute.typed::<f32>() {
-//!             let mut buffer = vec![0.0f32; values.len()];
-//!             reader.read_into(&values, &mut buffer)?;
+//!             println!("{:?}", reader.read_to_vec(&values)?);
 //!         }
 //!     }
 //! }

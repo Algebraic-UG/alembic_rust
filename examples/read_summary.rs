@@ -55,8 +55,7 @@ fn print_values<R: Read + Seek, T: bytemuck::Pod + Debug>(
     label: &str,
     handle: &ArrayHandle<T>,
 ) -> alembic_rust::Result<()> {
-    let mut values = vec![T::zeroed(); handle.len()];
-    reader.read_into(handle, &mut values)?;
+    let values = reader.read_to_vec(handle)?;
     println!("{label}: {values:?}");
     Ok(())
 }

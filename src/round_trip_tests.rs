@@ -189,3 +189,31 @@ fn streamed_user_data_reads_back_as_a_stream() {
     assert_eq!(start, blob[..10]);
     assert_eq!(values(&mut reader, small), [7, 8, 9]);
 }
+
+#[test]
+fn read_to_vec_returns_what_read_into_reads() {
+    let positions = [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]];
+    let (contents, mut reader) = round_trip(|archive| {
+        let mut points = archive.begin_points("p", 2).unwrap();
+        points.attribute(POSITIONS, &positions).unwrap();
+        points.attribute("t", &[20.0, 21.0]).unwrap();
+        points.finish().unwrap();
+        let mut empty = archive.begin_points("empty", 0).unwrap();
+        empty.attribute(POSITIONS, &[] as &[[f32; 3]]).unwrap();
+        empty.finish().unwrap();
+        archive.user_data("blob", &[7, 8, 9]).unwrap();
+    });
+    let points = &contents.points["p"];
+    let p = points.attributes[POSITIONS].typed::<[f32; 3]>().unwrap();
+    let t = points.attributes["t"].typed::<f32>().unwrap();
+    let blob = &contents.user_data["blob"];
+    let empty = contents.points["empty"].attributes[POSITIONS]
+        .typed::<[f32; 3]>()
+        .unwrap();
+
+    assert_eq!(reader.read_to_vec(&p).unwrap(), positions);
+    assert_eq!(reader.read_to_vec(&p).unwrap(), values(&mut reader, &p));
+    assert_eq!(reader.read_to_vec(&t).unwrap(), [20.0, 21.0]);
+    assert_eq!(reader.read_to_vec(blob).unwrap(), [7, 8, 9]);
+    assert!(reader.read_to_vec(&empty).unwrap().is_empty());
+}

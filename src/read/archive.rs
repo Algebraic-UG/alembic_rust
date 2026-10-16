@@ -78,6 +78,18 @@ impl<R: Read + Seek> ArchiveReader<R> {
             .read_into(handle.values, bytemuck::cast_slice_mut(destination))
     }
 
+    /// Reads the array behind `handle` into a new vector of
+    /// [`handle.len()`](ArrayHandle::len) elements.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::Io`] if reading fails.
+    pub fn read_to_vec<T: bytemuck::Pod>(&mut self, handle: &ArrayHandle<T>) -> Result<Vec<T>> {
+        let mut values = vec![T::zeroed(); handle.len];
+        self.read_into(handle, &mut values)?;
+        Ok(values)
+    }
+
     /// Reads the bytes of a blob as a stream, for example into a deserializer or
     /// [`io::copy`](std::io::copy).
     ///
