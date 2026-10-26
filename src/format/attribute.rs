@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::format::data_type::DataType;
 use crate::format::schema::{FLOAT1, FLOAT2, FLOAT3};
 
@@ -41,8 +43,12 @@ pub(crate) mod sealed {
 
 /// An element type of per-point attributes: `f32`, `[f32; 2]` or `[f32; 3]`.
 ///
-/// Only this crate implements it.
-pub trait AttributeElement: sealed::Sealed + bytemuck::Pod {
+/// Only this crate implements it. Every element type is [`bytemuck::Pod`], [`Debug`],
+/// [`Default`], [`PartialEq`], [`PartialOrd`], [`Send`] and [`Sync`], so generic code can rely on
+/// those.
+pub trait AttributeElement:
+    sealed::Sealed + bytemuck::Pod + Debug + Default + PartialEq + PartialOrd + Send + Sync
+{
     /// The attribute type whose elements are of this type.
     const TYPE: AttributeType;
 }
@@ -75,6 +81,23 @@ mod tests {
                 Some(attribute_type)
             );
         }
+    }
+
+    fn uses_the_common_traits<T: AttributeElement>(values: &[T]) -> String {
+        let copied = values.to_vec();
+        assert_eq!(copied, values);
+        assert!(T::default() <= T::default());
+        std::thread::scope(|scope| scope.spawn(|| format!("{values:?}")).join().unwrap())
+    }
+
+    #[test]
+    fn generic_code_can_use_the_common_traits() {
+        assert_eq!(uses_the_common_traits(&[1.0f32]), "[1.0]");
+        assert_eq!(uses_the_common_traits(&[[1.0f32, 2.0]]), "[[1.0, 2.0]]");
+        assert_eq!(
+            uses_the_common_traits(&[[1.0f32, 2.0, 3.0]]),
+            "[[1.0, 2.0, 3.0]]"
+        );
     }
 
     #[test]
