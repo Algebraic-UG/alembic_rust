@@ -1,9 +1,10 @@
 use std::env;
-use std::fmt::Debug;
 use std::fs::File;
 use std::io::{Read, Seek};
 
-use alembic_rust::{ArchiveReader, ArrayHandle, AttributeType, POSITIONS, read_archive};
+use alembic_rust::{
+    ArchiveReader, ArrayHandle, AttributeElement, AttributeType, POSITIONS, read_archive,
+};
 
 fn main() -> alembic_rust::Result<()> {
     let path = env::args()
@@ -50,7 +51,7 @@ fn main() -> alembic_rust::Result<()> {
     Ok(())
 }
 
-fn print_values<R: Read + Seek, T: bytemuck::Pod + Debug>(
+fn print_values<R: Read + Seek, T: AttributeElement>(
     reader: &mut ArchiveReader<R>,
     label: &str,
     handle: &ArrayHandle<T>,
