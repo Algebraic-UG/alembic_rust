@@ -1,3 +1,4 @@
 [submodule "alembic"]
 	path = alembic_cpp
-	url = git@github.com:alembic/alembic.git
+	url = https://github.com/alembic/alembic.git
+	update = none
