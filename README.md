@@ -114,8 +114,4 @@ The expected outputs contain the crate version (`written by alembic_rust 0.1.0`)
 - [`just`](https://github.com/casey/just), e.g. `cargo install just`.
 - CMake **3.29 or newer**, which Alembic 1.8.12 requires, e.g. `uv tool install cmake`.
 - A C++ compiler, `make`, and the Imath development files (`libimath-dev` on Debian/Ubuntu).
-- The `alembic_cpp` submodule. `.gitmodules` uses an SSH URL. Without SSH access to GitHub, clone it once over HTTPS:
-
-  ```sh
-  git -c url."https://github.com/".insteadOf="git@github.com:" submodule update --init alembic_cpp
-  ```
+- Network access the first time, when `just` fetches the `alembic_cpp` submodule.

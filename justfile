@@ -10,7 +10,7 @@ cpp_build_dir: get_cpp
     mkdir -p alembic_cpp/build/
 
 get_cpp:
-    git submodule update --init alembic_cpp
+    git submodule update --init --checkout alembic_cpp
 
 test: unit_tests (read_back "empty") (read_back "empty_info") (read_back "unfinished") (read_back "points") (read_back "points_edge_cases") (read_back "points_unfinished") (read_back "user_data")
 
